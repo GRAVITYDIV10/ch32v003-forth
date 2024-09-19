@@ -37,11 +37,9 @@ word header is optimized for ch32v003, please read source code
 
 * todo
 
-1. add flash support, add word into rom
+1. add flash support, we need add word into rom, without reboot.
 
-2. add driver support: i2c host/slave, spi host/slave
-
-3. add watchdog support
+2. add driver support: i2c host/slave, spi host/slave, timer.
 
 4. add interrupt support
 

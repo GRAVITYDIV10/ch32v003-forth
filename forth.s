@@ -44,6 +44,18 @@ reset:
 	or t1, t1, t2
 	sw t1, RCC_APB2PCENR(t0)
 
+	.equ RCC_RSTSCKR, 0x24
+	.equ RCC_LSION, (1 << 0)
+	.equ RCC_LSIRDY, (1 << 1)
+	lw t1, RCC_RSTSCKR(t0)
+	or t1, t1, RCC_LSION
+	sw t1, RCC_RSTSCKR(t0)
+
+1:
+	lw t1, RCC_RSTSCKR(t0)
+	andi t1, t1, RCC_LSIRDY
+	beqz t1, 1b
+
 	.equ AFIO_BASE, 0x40010000
 	.equ AFIO_PCFR1, 0x04
 	.equ AFIO_UART_MASK, (1 << 21) | (1 << 2)
@@ -103,8 +115,12 @@ reset:
 	.equ UART_RE, (1 << 2)
 	.equ UART_CTLR3, 0x14
 	.equ UART_HDSEL, (1 << 3)
+
+	.equ BAUD_9600,   (52 << 4) | (2 << 0)
+	.equ BAUD_115200, (4 << 4) | (5 << 0)
+
 	li t0, UART1_BASE
-	li t1, (4 << 4) | (5 << 0)
+	li t1, BAUD_115200
 	sw t1, UART_BRR(t0)
 	lw t1, UART_CTLR1(t0)
 	li t2, UART_UE | UART_TE | UART_RE
@@ -119,6 +135,41 @@ reset:
 	.equ IWDG_CTLR_R16, 0x00
 	.equ IWDG_PSCR_R16, 0x04
 	.equ IWDG_RLDR_R16, 0x08
+	.equ IWDG_STATR_R16, 0xC
+	.equ IWDG_RVU, (1 << 1)
+	.equ IWDG_PVU, (1 << 0)
+	.equ IWDG_KEYFEED, 0xAAAA
+	.equ IWDG_KEYUNLOCK, 0x5555
+	.equ IWDG_KEYON, 0xCCCC
+	li t0, IWDG_BASE
+	li t1, IWDG_KEYUNLOCK
+	sh t1, IWDG_CTLR_R16(t0)
+
+	.equ IWDG_DIVMASK, 0x7
+	.equ IWDG_DIV4, 0x0
+	.equ IWDG_DIV8, 0x1
+	.equ IWDG_DIV64, 0x4
+	.equ IWDG_DIV256, 0x6
+1:
+	lhu t1, IWDG_STATR_R16(t0)
+	andi t1, t1, IWDG_PVU
+	bnez t1, 1b
+
+	li t2, IWDG_DIVMASK
+	xori t2, t2, -1
+	lhu t1, IWDG_PSCR_R16(t0)
+	and t1, t1, t2
+	li t2, IWDG_DIV256
+	or t1, t1, t2
+	sh t1, IWDG_PSCR_R16(t0)
+
+1:
+	lw t1, IWDG_STATR_R16(t0)
+	andi t1, t1, IWDG_RVU
+	bnez t1, 1b
+
+	li t1, -1
+	sh t1, IWDG_RLDR_R16(t0)
 
 	j forth
 
@@ -423,9 +474,6 @@ reset:
 	lw xp, UART_DATAR(wp)
 	dpush xp
 	li wp, GPIOA_BASE
-	lw xp, GPIO_OUTDR(wp)
-	xori xp, xp, (1 << 2)
-	sw xp, GPIO_OUTDR(wp)
 	next
 
 	defword rx, "rx", f_rxread, attrnone
@@ -1373,7 +1421,7 @@ _str_call:
 	.ascii "call"
 	.p2align 2, 0
 
-	defword docon, ":", f_defword, attrnone
+	defword docom, ":", f_defword, attrnone
 1:
         .word f_toinrst
         .word f_token
@@ -1389,7 +1437,7 @@ _str_call:
 	.word f_compon
 	.word f_exit
 
-	defword docol, ";", f_docon, attrimmd
+	defword doend, ";", f_docom, attrimmd
 	.word f_2lit
 	.word _str_exit
 	.word 4
@@ -1402,7 +1450,7 @@ _str_exit:
 	.ascii "exit"
 	.p2align 2, 0
 
-	defconst ssdund, "ssdund", f_docol, attrnone
+	defconst ssdund, "ssdund", f_doend, attrnone
 	.word ssdund
 
 	defcode sprst, "sprst", f_ssdund, attrnone
@@ -1453,8 +1501,17 @@ _str_branch0:
 	.word f_hex32
 	.word f_exit
 
-	defword feedog, "feedog", f_dot, attrnone
-	.word f_exit
+	defcode dogon, "dogon", f_dot, attrnone
+	li wp, IWDG_BASE
+	li xp, IWDG_KEYON
+	sh xp, IWDG_CTLR_R16(wp)
+	next
+
+	defcode feedog, "feedog", f_dogon, attrnone
+	li wp, IWDG_BASE
+	li xp, IWDG_KEYFEED
+	sh xp, IWDG_CTLR_R16(wp)
+	next
 
 	defconst yieldcount, "yieldcount", f_feedog, attrnone
 	.word yield_count
@@ -1469,11 +1526,35 @@ _str_branch0:
 	.word _str_motd
 	.word _str_motd_end - _str_motd
 	.word f_type
+	.word f_2lit
+	.word _str_flash_info
+	.word _str_flash_info_end - _str_flash_info
+	.word f_type
+	.word f_romsize
+	.word f_hex16
+	.word f_newline
+	.word f_2lit
+	.word _str_uid
+	.word _str_uid_end - _str_uid
+	.word f_type
+	.word f_uid1
+	.word f_hex32
+	.word f_uid2
+	.word f_hex32
+	.word f_uid3
+	.word f_hex32
+	.word f_newline
 	.word f_exit
 
 _str_motd:
 	.ascii "FORTH on CH32V003\n\r"
 _str_motd_end:
+_str_flash_info:
+	.ascii "FLASH SIZE: 0x"
+_str_flash_info_end:
+_str_uid:
+	.ascii "CHIP UID: "
+_str_uid_end:
 	.p2align 2, 0
 
 	defword tick, "'", f_motd, attrnone
@@ -1668,14 +1749,96 @@ _str_motd_end:
 	next
 
 	defword dotask, "task;", f_wbodyget, attrimmd
-	.word f_docol
+	.word f_doend
 	.word f_latest
 	.word f_load
 	.word f_wbodyget
 	.word f_tasknew
 	.word f_exit
 
-	defword interpret, "interpret", f_dotask, attrnone
+	defcode reboot, "reboot", f_dotask, attrnone
+	.equ PFIC_BASE, 0xE000E000
+	.equ PFIC_CFGR, 0x48
+	.equ PFIC_KEY3, (0xBEEF << 16)
+	.equ SYSRESET, (1 << 7)
+	li wp, PFIC_BASE
+	li xp, SYSRESET | PFIC_KEY3
+	sw xp, PFIC_CFGR(wp)
+1:
+	j 1b
+
+	defcode uid1, "uid1", f_reboot, attrnone
+	.equ ESIG_BASE, 0x1FFFF700
+	.equ ESIG_UNIID1, 0xE8
+	li wp, ESIG_BASE
+	lw xp, ESIG_UNIID1(wp)
+	dpush xp
+	next
+
+	defcode uid2, "uid2", f_uid1, attrnone
+	.equ ESIG_UNIID2, 0xEC
+	li wp, ESIG_BASE
+	lw xp, ESIG_UNIID2(wp)
+	dpush xp
+	next
+
+	defcode uid3, "uid3", f_uid2, attrnone
+	.equ ESIG_UNIID3, 0xF0
+	li wp, ESIG_BASE
+	lw xp, ESIG_UNIID3(wp)
+	dpush xp
+	next
+
+	defcode romsize, "romsize", f_uid3, attrnone
+	.equ ESIG_FLACAP, 0xE0
+	li wp, ESIG_BASE
+	lhu xp, ESIG_FLACAP(wp)
+	dpush xp
+	next
+
+	// TODO, impl div
+	defword sysclk, "sysclk", f_romsize, attrnone
+	.word f_lit
+	.word 24
+	.word f_exit
+
+	defword hclk, "hclk", f_sysclk, attrnone
+	.word f_lit
+	.word 8
+	.word f_exit
+
+	defcode baudset, "baudset", f_hclk, attrnone
+	li wp, UART1_BASE
+	dpop xp
+	li yp, 9600
+	beq xp, yp, baud9600
+	li yp, 115200
+	beq xp, yp, baud115200
+	next
+
+baud9600:
+	li xp, BAUD_9600
+	sw xp, UART_BRR(wp)
+	next
+
+baud115200:
+	li xp, BAUD_115200
+	sw xp, UART_BRR(wp)
+	next
+
+	defcode paoutget, "paout@", f_hclk, attrnone
+	li wp, GPIOA_BASE
+	lw xp, GPIO_OUTDR(wp)
+	dpush xp
+	next
+
+	defcode paoutset, "paout!", f_paoutget, attrnone
+	li wp, GPIOA_BASE
+	dpop xp
+	sw xp, GPIO_OUTDR(wp)
+	next
+
+	defword interpret, "interpret", f_paoutset, attrnone
 interpret_start:
 	.word f_toinrst
 	.word f_token
