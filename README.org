@@ -1,0 +1,50 @@
+* forth on ch32v003
+
+a simple multitask forth on ch32v003
+
+* build
+
+#+BEGIN_SRC shell
+make
+#+END_SRC
+
+* connect & download
+
+#+BEGIN_SRC text
+  [          ] PD1(SWIO) <------------> SWIO [          ]
+  [ CH32V003 ] VSS       <------------> GND  [ WCH LINK ]
+  [          ] VDD       <------------> 3V3  [          ]
+	PD6 <-----------------------------> UART TX & RX   
+#+END_SRC
+
+use this software download it into mcu:
+
+https://www.wch.cn/downloads/WCH-LinkUtility_ZIP.html
+
+* access
+
+PD6 provide half-duplex one wire uart
+
+baudrate is 115200
+
+* word layout
+
+word header is optimized for ch32v003, please read source code
+
+* screenshot
+
+[[file:ch32v003-forth.png]]
+
+* todo
+
+1. add flash support, add word into rom
+
+2. add driver support: i2c host/slave, spi host/slave
+
+3. add watchdog support
+
+4. add interrupt support
+
+* license
+
+mit
