@@ -1,8 +1,77 @@
 	.global _start
 _start:
 	.option norvc;
+_vector:
 	j reset
+	.word 0
+	.word nmi_handler
+	.word hardfault_handler
+	.word 0
+	.word 0
+	.word 0
+	.word 0
+	.word 0
+	.word 0
+	.word 0
+	.word 0
+	.word systick_handler
+	.word 0
+	.word sw_handler
+	.word 0
+	.word wwdg_handler
+	.word pvd_handler
+	.word flash_handler
+	.word rcc_handler
+	.word exti70_handler
+	.word awu_handler
+	.word dma1c1_handler
+	.word dma1c2_handler
+	.word dma1c3_handler
+	.word dma1c4_handler
+	.word dma1c5_handler
+	.word dma1c6_handler
+	.word dma1c7_handler
+	.word adc1_handler
+	.word i2c1_ev_handler
+	.word i2c1_er_handler
+	.word usart1_handler
+	.word spi1_handler
+	.word tim1_brk_handler
+	.word tim1_up_handler
+	.word tim1_trgcom_handler
+	.word tim1_cc_handler
+	.word tim2_handler
+_vector_end:
 	.option rvc;
+
+nmi_handler:
+hardfault_handler:
+sw_handler:
+wwdg_handler:
+pvd_handler:
+flash_handler:
+rcc_handler:
+exti70_handler:
+awu_handler:
+dma1c1_handler:
+dma1c2_handler:
+dma1c3_handler:
+dma1c4_handler:
+dma1c5_handler:
+dma1c6_handler:
+dma1c7_handler:
+dma1c7_handler:
+adc1_handler:
+i2c1_ev_handler:
+i2c1_er_handler:
+usart1_handler:
+spi1_handler:
+tim1_brk_handler:
+tim1_up_handler:
+tim1_trgcom_handler:
+tim1_cc_handler:
+tim2_handler:
+	j sysrst
 
 #define wp t0
 #define xp t1
@@ -11,7 +80,7 @@ _start:
 #define ip fp
 #define ss s1
 #define up tp
-#define st a0
+#define st gp
 
 	.equ addrsize, 4
 
@@ -171,7 +240,92 @@ reset:
 	li t1, -1
 	sh t1, IWDG_RLDR_R16(t0)
 
-	j forth
+
+	// IRQ
+	la t0, _vector
+	la t1, _ram_vector
+	la t2, _vector_end
+
+	// copy vector table
+2:
+	bge t0, t2, 1f
+	lw a0, 0(t0)
+	sw a0, 0(t1)
+	addi t0, t0, addrsize
+	addi t1, t1, addrsize
+	j 2b
+1:
+	// set vector table address
+	la t0, _ram_vector
+	ori t0, t0, 0x3
+	csrw mtvec, t0
+
+	// enable global interrupt and configure privileged mode
+	li t0, 0x1880
+	csrw mstatus, t0
+	// not enable hardware stack, mainline gcc compiler not suppot this
+	// not enable interrupt nesting
+
+        .equ PFIC_BASE, 0xE000E000
+	.equ PFIC_IENR1,0x100
+	.equ IRQ_STK, 12
+	li t0, PFIC_BASE
+	lw t1, PFIC_IENR1(t0)
+	li t2, (1 << IRQ_STK)
+	or t1, t1, t2
+	sw t1, PFIC_IENR1(t0)
+
+	// systick
+	.equ STK_BASE, 0xE000F000
+	.equ STK_CTLR, 0x00
+	.equ STK_SR,   0x04
+	.equ STK_CNTL, 0x08
+	.equ STK_CMPLR,0x10
+
+	li t0, STK_BASE
+	li t1, 1000 // 1ms
+	sw t1, STK_CMPLR(t0)
+	sw zero, STK_CNTL(t0)
+
+	.equ STK_SWIE, (1 << 31)
+	.equ STK_STRE, (1 << 3)
+	.equ STK_HCLK, (1 << 2)
+	.equ STK_HCLKDIV8, (0 << 2)
+	.equ STK_STIE, (1 << 1)
+	.equ STK_STEN, (1 << 0)
+	li t1, STK_STRE | STK_HCLKDIV8 | STK_STIE | STK_STEN
+	sw t1, STK_CTLR(t0)
+
+	// jump to forth
+	la t0, forth
+	csrw mepc, t0
+	mret
+
+systick_handler:
+	li a5, STK_BASE
+	sw zero, STK_SR(a5)
+
+	la a5, systick_count
+	lw a4, 0(a5)
+	li a3, -1
+	beq a4, a3, 1f
+	addi a4, a4, 1
+	sw a4, 0(a5)
+	j 2f
+1:
+	sw zero, 0(a5)
+	lw a4, addrsize(a5)
+	addi a4, a4, 1
+	sw a4, addrsize(a5)
+2:
+
+/*
+	li a5, GPIOA_BASE
+	lw a4, GPIO_OUTDR(a5)
+	xori a4, a4, (1 << 2)
+	sw a4, GPIO_OUTDR(a5)
+*/
+	mret
 
 	// ch32v003 :
 	// 0x00000000 ~ 0x00003FFF   ROM 16KiB
@@ -1516,12 +1670,59 @@ _str_branch0:
 	defconst yieldcount, "yieldcount", f_feedog, attrnone
 	.word yield_count
 
-	defword quest, "?", f_yieldcount, attrnone
+	defconst systickcount, "systickcount", f_yieldcount, attrnone
+	.word systick_count
+
+	defconst systickcounthigh, "systickcounthigh", f_systickcount, attrnone
+	.word systick_count + addrsize
+
+	defword millis, "millis", f_systickcounthigh, attrnone
+	.word f_systickcount
+	.word f_load
+	.word f_exit
+
+	defword quest, "?", f_millis, attrnone
 	.word f_load
 	.word f_dot
 	.word f_exit
 
-	defword motd, "motd", f_quest, attrnone
+	defcode neq, "<>", f_quest, attrnone
+	dpop wp
+	dpop xp
+	bne wp, xp, 1f
+	dpush zero
+	next
+1:
+	li xp, -1
+	dpush xp
+	next
+
+	defword delay1ms, "delay1ms", f_neq, attrnone
+	.word f_millis
+1:
+	.word f_yield
+	.word f_dup
+	.word f_millis
+	.word f_neq
+	.word f_branch0
+	.word 1b
+	.word f_drop
+	.word f_exit
+
+	defword delayms, "delayms", f_delay1ms, attrnone
+2:
+	.word f_dup
+	.word f_branch0
+	.word 1f
+	.word f_delay1ms
+	.word f_dec
+	.word f_branch
+	.word 2b
+1:
+	.word f_drop
+	.word f_exit
+
+	defword motd, "motd", f_delayms, attrnone
 	.word f_2lit
 	.word _str_motd
 	.word _str_motd_end - _str_motd
@@ -1757,15 +1958,15 @@ _str_uid_end:
 	.word f_exit
 
 	defcode reboot, "reboot", f_dotask, attrnone
-	.equ PFIC_BASE, 0xE000E000
-	.equ PFIC_CFGR, 0x48
-	.equ PFIC_KEY3, (0xBEEF << 16)
-	.equ SYSRESET, (1 << 7)
-	li wp, PFIC_BASE
-	li xp, SYSRESET | PFIC_KEY3
-	sw xp, PFIC_CFGR(wp)
+sysrst:
+        .equ PFIC_CFGR, 0x48
+        .equ PFIC_KEY3, (0xBEEF << 16)
+        .equ SYSRESET, (1 << 7)
+        li wp, PFIC_BASE
+        li xp, SYSRESET | PFIC_KEY3
+        sw xp, PFIC_CFGR(wp)
 1:
-	j 1b
+        j 1b
 
 	defcode uid1, "uid1", f_reboot, attrnone
 	.equ ESIG_BASE, 0x1FFFF700
@@ -4083,9 +4284,16 @@ forth:
 	la xp, ramhere
 	sw wp, 0(xp)
 
+	la wp, systick_count
+	sw zero, 0(wp)
+	sw zero, addrsize(wp)
+
 	next
 
 	.section .bss
+_ram_vector:
+	.fill _vector_end - _vector, 1, 0
+_ram_vector_end:
 dstk_human:
         .fill dstksize, addrsize, 0
 dstk_human_end:
@@ -4096,6 +4304,8 @@ rstk_human:
         .fill rstksize, addrsize, 0
 rstk_human_end:
         .fill 1, addrsize, 0
+systick_count:
+	.fill 2, addrsize, 0
 yield_count:
 	.fill 1, addrsize, 0
 tib:

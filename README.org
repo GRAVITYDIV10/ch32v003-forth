@@ -41,8 +41,6 @@ word header is optimized for ch32v003, please read source code
 
 2. add driver support: i2c host/slave, spi host/slave, timer.
 
-4. add interrupt support
-
 * license
 
 mit

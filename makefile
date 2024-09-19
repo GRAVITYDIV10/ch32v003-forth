@@ -11,7 +11,7 @@ SZ = $(CROSS_COMPILE)size
 LINK_SCRIPT ?= link.ld
 
 CFLAGS += \
-	-march=rv32ec -mabi=ilp32e \
+	-march=rv32ec_zicsr -mabi=ilp32e \
 	-mno-relax -nostdlib \
 	-x assembler-with-cpp -ggdb \
 	-T $(LINK_SCRIPT)
