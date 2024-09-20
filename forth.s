@@ -274,6 +274,12 @@ reset:
 	li t2, (1 << IRQ_STK)
 	or t1, t1, t2
 	sw t1, PFIC_IENR1(t0)
+	.equ PFIC_IENR2,0x104
+	.equ IRQ_UART1, 0
+	lw t1, PFIC_IENR2(t0)
+	li t2, (1 << IRQ_UART1)
+	or t1, t1, t2
+	sw t1, PFIC_IENR2(t0)
 
 	// systick
 	.equ STK_BASE, 0xE000F000
@@ -282,19 +288,12 @@ reset:
 	.equ STK_CNTL, 0x08
 	.equ STK_CMPLR,0x10
 
-	li t0, STK_BASE
-	li t1, 1000 // 1ms
-	sw t1, STK_CMPLR(t0)
-	sw zero, STK_CNTL(t0)
-
-	.equ STK_SWIE, (1 << 31)
-	.equ STK_STRE, (1 << 3)
-	.equ STK_HCLK, (1 << 2)
-	.equ STK_HCLKDIV8, (0 << 2)
-	.equ STK_STIE, (1 << 1)
-	.equ STK_STEN, (1 << 0)
-	li t1, STK_STRE | STK_HCLKDIV8 | STK_STIE | STK_STEN
-	sw t1, STK_CTLR(t0)
+        .equ STK_SWIE, (1 << 31)
+        .equ STK_STRE, (1 << 3)
+        .equ STK_HCLK, (1 << 2)
+        .equ STK_HCLKDIV8, (0 << 2)
+        .equ STK_STIE, (1 << 1)
+        .equ STK_STEN, (1 << 0)
 
 	// jump to forth
 	la t0, forth
@@ -827,11 +826,32 @@ xdigits:
 	defconst tib, "tib", f_toin, attrnone
 	.word tib
 
-	defcode store, "!", f_tib, 0
+	.equ ROM_BASE, 0x0
+	defconst rombase, "rombase", f_tib, attrnone
+	.word ROM_BASE
+
+	.equ ROM_TOP, 0x4000
+	defconst romtop, "romtop", f_rombase, attrnone
+	.word ROM_TOP
+
+	defcode mem32store, "mem32!", f_romtop, 0
 	dpop wp
 	dpop xp
 	sw xp, 0(wp)
 	next
+
+	defword store, "!", f_mem32store, 0
+	.word f_dup
+	.word f_rombase
+	.word f_romtop
+	.word f_within
+	.word f_branch0
+	.word 1f
+	.word f_rom32store
+	.word f_exit
+1:
+	.word f_mem32store
+	.word f_exit
 
 	defword toinrst, ">inrst", f_store, attrnone
 	.word f_lit
@@ -1670,7 +1690,21 @@ _str_branch0:
 	defconst yieldcount, "yieldcount", f_feedog, attrnone
 	.word yield_count
 
-	defconst systickcount, "systickcount", f_yieldcount, attrnone
+	defcode systickon, "systickon", f_yieldcount, attrnone
+        li wp, STK_BASE
+        li xp, 1000 // 1ms
+        sw xp, STK_CMPLR(wp)
+        sw zero, STK_CNTL(wp)
+        li xp, STK_STRE | STK_HCLKDIV8 | STK_STIE | STK_STEN
+        sw xp, STK_CTLR(wp)
+	next
+
+	defcode systickoff, "systickoff", f_systickon, attrnone
+	li wp, STK_BASE
+	sw zero, STK_CTLR(wp)
+	next
+
+	defconst systickcount, "systickcount", f_systickoff, attrnone
 	.word systick_count
 
 	defconst systickcounthigh, "systickcounthigh", f_systickcount, attrnone
@@ -2039,7 +2073,84 @@ baud115200:
 	sw xp, GPIO_OUTDR(wp)
 	next
 
-	defword interpret, "interpret", f_paoutset, attrnone
+	defcode romunlock, "romunlock", f_paoutset, attrnone
+	.equ FLASH_BASE, 0x40022000
+	.equ FLASH_ACTLR,  0x00
+	.equ FLASH_KEYR,   0x04
+	.equ FLASH_OBKEYR, 0x08
+	.equ FLASH_STATR,  0x0C
+	.equ FLASH_CTLR,   0x10
+	.equ FLASH_KEY1,   0x45670123
+	.equ FLASH_KEY2,   0xCDEF89AB
+	li wp, FLASH_BASE
+	li xp, FLASH_KEY1
+	sw xp, FLASH_KEYR(wp)
+	li xp, FLASH_KEY2
+	sw xp, FLASH_KEYR(wp)
+	next
+
+	defcode romlock, "romlock", f_romunlock, attrnone
+	.equ FLASH_LOCK, (1 << 7)
+	li wp, FLASH_BASE
+	lw xp, FLASH_CTLR(wp)
+	ori xp, xp, FLASH_LOCK
+	sw xp, FLASH_CTLR(wp)
+	next
+
+	defcode rom16store, "rom16!", f_romlock, attrnone
+	dpop wp // addr
+	dpop xp // value
+	li yp, 0xFFFF
+	and xp, xp, yp
+rom16w_loop:
+	lhu yp, 0(wp)
+	beq xp, yp, rom16w_done
+	dpush xp
+start_rom_write:
+	.equ FLASH_PG, (1 << 0)
+	la yp, FLASH_BASE
+	lw xp, FLASH_CTLR(yp)
+	ori xp, xp, FLASH_PG
+	sw xp, FLASH_CTLR(yp)
+	dpop xp
+	.equ CODE_FLASH_BASE, 0x08000000
+	li yp, CODE_FLASH_BASE
+	dpush wp
+	or wp, wp, yp
+	sh xp, 0(wp)
+	dpop wp
+wait_rom_write:
+	dpush xp
+	.equ FLASH_BUSY, (1 << 0)
+	la yp, FLASH_BASE
+1:
+	lw xp, FLASH_STATR(yp)
+	andi xp, xp, FLASH_BUSY
+	bnez xp, 1b
+end_rom_write:
+	lw xp, FLASH_CTLR(yp)
+	xori xp, xp, FLASH_PG
+	sw xp, FLASH_CTLR(yp)
+	dpop xp
+	j rom16w_loop
+rom16w_done:
+	next
+
+	defword rom32store, "rom32!", f_rom16store, attrnone
+	.word f_2dup
+	.word f_swap
+	.word f_lit
+	.word 16
+	.word f_rshift
+	.word f_swap
+	.word f_lit
+	.word 2
+	.word f_add
+	.word f_rom16store
+	.word f_rom16store
+	.word f_exit
+
+	defword interpret, "interpret", f_rom32store, attrnone
 interpret_start:
 	.word f_toinrst
 	.word f_token
@@ -4289,6 +4400,9 @@ forth:
 	sw zero, addrsize(wp)
 
 	next
+
+	// flash min erase size is 1K
+	.p2align 10, 0xFF  // align with 1024
 
 	.section .bss
 _ram_vector:

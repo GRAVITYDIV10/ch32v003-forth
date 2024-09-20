@@ -12,10 +12,11 @@ SECTIONS
 	{
 		*(.text)
 		*(.text*)
+		. = ALIGN(4);
 		*(.rodata)
 		*(.rodata*)
 		. = ALIGN(4);
-		
+		PROVIDE(_rom_dict_start = .);
 	} >ROM AT>ROM
 
 	.bss (NOLOAD) :
