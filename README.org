@@ -52,6 +52,12 @@ word header is optimized for ch32v003, please read source code
 : stars dup if begin star 1- dup 0= until then drop ;
 #+END_SRC
 
+* constant
+
+#+BEGIN_SRC forth
+0x41 constant ascii-A
+#+END_SRC
+
 * look dict
 
 #+BEGIN_SRC forth

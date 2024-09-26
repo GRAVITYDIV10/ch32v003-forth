@@ -1414,7 +1414,13 @@ a_lshift:
 	.word f_lshift
 	.word f_exit
 
-	wdef hex2num, "hex2num", a_call, f_4mul, 0
+	wdef 4div, "4/", a_call, f_4mul, 0
+	.word f_lit
+	.word 2
+	.word f_rshift
+	.word f_exit
+
+	wdef hex2num, "hex2num", a_call, f_4div, 0
 	.word f_dup
 	.word f_lit
 	.word '9'
@@ -1551,7 +1557,10 @@ a_wisimmd:
 	wdef here, "here", a_doconst, f_wisimmd, 0
 	.word here
 
-	wdef hereload, "here@", a_call, f_here, 0
+	wdef romhere, "romhere", a_doconst, f_here, 0
+	.word romhere
+
+	wdef hereload, "here@", a_call, f_romhere, 0
 	.word f_here
 	.word f_load
 	.word f_exit
@@ -1597,7 +1606,32 @@ a_wisimmd:
 	.word f_2drop
 	.word f_exit
 
-	wdef aligned, "aligned", a_aligned, f_cmove, 0
+	wdef move, "move", a_call, f_cmove, 0
+2:
+	.word f_dup
+	.word f_branch0
+	.word 1f
+	.word f_dec
+	.word f_tor
+	.word f_over
+	.word f_load
+	.word f_over
+	.word f_store
+	.word f_cell
+	.word f_add
+	.word f_swap
+	.word f_cell
+	.word f_add
+	.word f_swap
+	.word f_fromr
+	.word f_branch
+	.word 2b
+1:
+	.word f_drop
+	.word f_2drop
+	.word f_exit
+
+	wdef aligned, "aligned", a_aligned, f_move, 0
 a_aligned:
 	call dpop
 	addi tos, tos, ((-1) + addrsize)
@@ -1616,7 +1650,7 @@ a_aligned:
 	.word f_exit
 
 	// (addr u)
-	wdef defword, "defword", a_call, f_wentrload, 0
+	wdef newword, "newword", a_call, f_wentrload, 0
 	.word f_align
 
 	// set link & nlen
@@ -1630,12 +1664,9 @@ a_aligned:
 	.word f_hereload
 	.word f_lateststore
 
-	// set entry
-	.word f_2lit
-	.word n_call
-	.word 4
-	.word f_find
-	.word f_wentrload
+	// set it later entry
+	.word f_lit
+	.word -1
 	.word f_comma
 
 	.word f_dup
@@ -1644,7 +1675,9 @@ a_aligned:
 	// copy name
 	.word f_hereload
 	.word f_swap
-	.word f_cmove
+	.word f_aligned
+	.word f_4div
+	.word f_move
 
 	.word f_fromr
 	.word f_hereload
@@ -1654,7 +1687,44 @@ a_aligned:
 	.word f_align
 	.word f_exit
 
-	wdef docom, ":", a_call, f_defword, 0
+	wdef defword, "defword", a_call, f_newword, 0
+	.word f_newword
+	.word f_2lit
+	.word n_call
+	.word 4
+	.word f_find
+	.word f_load
+	.word f_latestload
+	.word f_store
+	.word f_exit
+
+	wdef defconst, "defconst", a_call, f_defword, 0
+	.word f_newword
+	.word f_2lit
+	.word n_doconst
+	.word 7
+	.word f_find
+	.word f_load
+	.word f_latestload
+	.word f_store
+	.word f_exit
+
+	wdef constant, "constant", a_call, f_defconst, 0
+1:
+	.word f_toinrst
+	.word f_token
+	.word f_toinload
+	.word f_branch0
+	.word 1b
+
+	.word f_tib
+	.word f_toinload
+	.word f_defconst
+	.word f_comma
+
+	.word f_exit
+
+	wdef docom, ":", a_call, f_constant, 0
 1:
 	.word f_toinrst
 	.word f_token
@@ -2024,7 +2094,33 @@ a_rambaksave:
 1:
 	next
 
-	wdef interpret, "interpret", a_call, f_rambaksave, 0
+	wdef tip, "tip", a_doconst, f_rambaksave, 0
+	.word tip
+	wdef tss, "tss", a_doconst, f_tip, 0
+	.word tss
+	wdef tsp, "tsp", a_doconst, f_tss, 0
+	.word tsp
+	wdef tst, "tst", a_doconst, f_tsp, 0
+	.word tst
+	wdef trp, "trp", a_doconst, f_tst, 0
+	.word trp
+	wdef tnp, "tnp", a_doconst, f_trp, 0
+	.word tnp
+
+	wdef upget, "up@", a_upget, f_tnp, 0
+a_upget:
+	mv tos, up
+	call dpush
+	next
+
+	wdef allot, "allot", a_call, f_upget, 0
+	.word f_4mul
+	.word f_hereload
+	.word f_add
+	.word f_herestore
+	.word f_exit
+
+	wdef interpret, "interpret", a_call, f_allot, 0
 	.word f_toinload
 	.word f_branch0
 	.word interpret_nothing
@@ -2129,6 +2225,10 @@ forth:
 
 	la wp, here
 	la xp, dict_base
+	sw xp, 0(wp)
+
+	la wp, romhere
+	la xp, _rom_used
 	sw xp, 0(wp)
 
 	call tasksave
@@ -4034,6 +4134,30 @@ _cm0:
 	.ascii "12345"
 	.p2align 2, 0xFF
 1:
+
+	display test_move, "move."
+	.word f_lit
+	.word _m0
+	.word f_hereload
+	.word f_lit
+	.word 3
+	.word f_move
+	.word f_dzchk
+
+	.word f_2lit
+	.word _m0
+	.word (3 * addrsize)
+	.word f_hereload
+	.word f_over
+	.word f_compare
+	.word f_failez
+	.word f_dzchk
+_m0:
+	.word f_noop
+	.word f_branch
+	.word 1f
+1:
+
 	display test_aligned, "aligned."
 	.word f_lit
 	.word 4
@@ -4215,13 +4339,18 @@ latest:
 	.fill 1, addrsize, 0
 here:
 	.fill 1, addrsize, 0
+romhere:
+	.fill 1, addrsize, 0
 toin:
 	.fill 1, addrsize, 0
+
+	.p2align 2, 0
 tib:
 	.fill tibsize, 1, 0
 tib_top:
 	.fill 1, 1, 0
 	.p2align 2, 0
+
 dstk_human:
 	.fill stksize, addrsize, 0
 dstk_top_human:

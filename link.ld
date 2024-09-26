@@ -16,6 +16,7 @@ SECTIONS
 		*(.rodata)
 		*(.rodata*)
 		. = ALIGN(4);
+		PROVIDE(_rom_used = .);
 	} >ROM AT>ROM
 
 	.bss (NOLOAD) :
