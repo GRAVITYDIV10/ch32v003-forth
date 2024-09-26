@@ -130,7 +130,7 @@ please define multi action in one task.
 create a dummy task:
 
 #+BEGIN_SRC forth
-: dummytask begin yield false until ;
+: dummytask begin yield false until task;
 #+END_SRC
 
 create a task display star per 1 sec
