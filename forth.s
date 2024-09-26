@@ -1747,7 +1747,23 @@ a_aligned:
 	.word f_compoff
 	.word f_exit
 
-	wdef ifnz, "if", a_call, f_doend, attr_immed
+	wdef wbodyload, "wbody@", a_call, f_doend, 0
+	.word f_dup
+	.word f_wnlenload
+	.word f_aligned
+	.word f_add
+	.word f_cell
+	.word f_add
+	.word f_exit
+
+	wdef dotask, "task;", a_call, f_wbodyload, attr_immed
+	.word f_doend
+	.word f_latestload
+	.word f_wbodyload
+	.word f_newtask
+	.word f_exit
+
+	wdef ifnz, "if", a_call, f_dotask, attr_immed
 	.word f_2lit
 	.word n_branch0
 	.word 7
@@ -1827,7 +1843,34 @@ a_systickoff:
 	wdef mscounth, "mscounth", a_doconst, f_mscountl, 0
 	.word mscounth
 
-	wdef irqcount, "irqcount", a_doconst, f_mscounth, 0
+	wdef delay1ms, "delay1ms", a_call, f_mscounth, 0
+	.word f_mscountl
+	.word f_load
+1:
+	.word f_yield
+	.word f_dup
+	.word f_mscountl
+	.word f_load
+	.word f_neq
+	.word f_branch0
+	.word 1b
+	.word f_drop
+	.word f_exit
+
+	wdef delayms, "delayms", a_call, f_delay1ms, 0
+2:
+	.word f_dup
+	.word f_branch0
+	.word 1f
+	.word f_delay1ms
+	.word f_dec
+	.word f_branch
+	.word 2b
+1:
+	.word f_drop
+	.word f_exit
+
+	wdef irqcount, "irqcount", a_doconst, f_delayms, 0
 	.word irqcount
 
 	wdef motd, "motd", a_call, f_irqcount, 0
@@ -2094,17 +2137,7 @@ a_rambaksave:
 1:
 	next
 
-	wdef tip, "tip", a_doconst, f_rambaksave, 0
-	.word tip
-	wdef tss, "tss", a_doconst, f_tip, 0
-	.word tss
-	wdef tsp, "tsp", a_doconst, f_tss, 0
-	.word tsp
-	wdef tst, "tst", a_doconst, f_tsp, 0
-	.word tst
-	wdef trp, "trp", a_doconst, f_tst, 0
-	.word trp
-	wdef tnp, "tnp", a_doconst, f_trp, 0
+	wdef tnp, "tnp", a_doconst, f_rambaksave, 0
 	.word tnp
 
 	wdef upget, "up@", a_upget, f_tnp, 0
@@ -2112,6 +2145,66 @@ a_upget:
 	mv tos, up
 	call dpush
 	next
+
+	wdef stksize, "stksize", a_doconst, f_upget, 0
+	.word stksize
+
+	wdef tasksize, "tasksize", a_doconst, f_stksize, 0
+	.word tasksize
+
+	// (addr)
+	wdef newtask, "newtask", a_call, f_tasksize, 0
+	// create data stack
+	.word f_stksize
+	.word f_allot
+	.word f_hereload
+	.word f_lit
+	.word 1
+	.word f_allot
+
+	// create return stack
+	.word f_stksize
+	.word f_allot
+	.word f_hereload
+	.word f_lit
+	.word 1
+	.word f_allot
+
+	// (addr dstkaddr rstkaddr)
+	.word f_rot
+	.word f_hereload // taskaddr
+	.word f_swap
+	.word f_comma // set tip
+
+	// (dstkaddr rstkaddr taskaddr)
+	.word f_lit
+	.word 0
+	.word f_comma // set tss
+
+	.word f_rot
+	.word f_dup
+	.word f_comma // set tsp
+	.word f_comma // set tst
+	
+	// (rstkaddr taskaddr)
+	.word f_swap
+	.word f_comma // set trp
+
+	// (taskaddr)
+	.word f_upget
+	.word f_tnp
+	.word f_add
+	.word f_load
+	.word f_dsdump
+	.word f_comma // set tnp
+
+	// (taskaddr)
+	.word f_upget
+	.word f_tnp
+	.word f_add
+	.word f_store // link task to current task
+
+	.word f_exit
 
 	wdef allot, "allot", a_call, f_upget, 0
 	.word f_4mul

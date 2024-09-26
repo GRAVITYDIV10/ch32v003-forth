@@ -82,6 +82,8 @@ romunlock rambakerase rompgon rambaksave rompgoff romlock
 
 You can load your saved environment from rom
 
+only recover data in ram, some data such as mmio register, riscv csr, can't restore
+
 #+BEGIN_SRC forth
 rambakload
 #+END_SRC
@@ -119,13 +121,31 @@ dump ms count high 32bit:
 mscounth ?
 #+END_SRC
 
+* multitasking
+
+ch32v003 only have 2KiB SRAM, don't define a lot of task,
+
+please define multi action in one task.
+
+create a dummy task:
+
+#+BEGIN_SRC forth
+: dummytask begin yield false until ;
+#+END_SRC
+
+create a task display star per 1 sec
+
+#+BEGIN_SRC forth
+systickon
+: star 0x2A emit ;
+: startask begin yield 0x3E8 delayms star false until task;
+#+END_SRC
+
 * todo
 
-1. add doc for multi task
+1. add doc for define a new word in asm file
 
-2. add doc for define a new word in asm file
-
-3. add i2c host driver
+2. add i2c host driver
 
 * license
 
