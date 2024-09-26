@@ -2195,7 +2195,6 @@ a_upget:
 	.word f_tnp
 	.word f_add
 	.word f_load
-	.word f_dsdump
 	.word f_comma // set tnp
 
 	// (taskaddr)
