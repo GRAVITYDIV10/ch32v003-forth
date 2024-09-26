@@ -16,15 +16,12 @@ SECTIONS
 		*(.rodata)
 		*(.rodata*)
 		. = ALIGN(4);
-		PROVIDE(_rom_dict_start = .);
 	} >ROM AT>ROM
 
 	.bss (NOLOAD) :
 	{
 		. = ALIGN(4);
 		*(.bss)
-		. = ALIGN(4);
-		PROVIDE(_ram_dict_start = .);
 		. = ALIGN(4);
 	} >RAM AT>ROM
 }

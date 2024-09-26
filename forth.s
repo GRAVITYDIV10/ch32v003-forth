@@ -1,180 +1,171 @@
-	.global _start
-_start:
-	.option norvc;
-_vector:
-	j reset
-	.word 0
-	.word nmi_handler
-	.word hardfault_handler
-	.word 0
-	.word 0
-	.word 0
-	.word 0
-	.word 0
-	.word 0
-	.word 0
-	.word 0
-	.word systick_handler
-	.word 0
-	.word sw_handler
-	.word 0
-	.word wwdg_handler
-	.word pvd_handler
-	.word flash_handler
-	.word rcc_handler
-	.word exti70_handler
-	.word awu_handler
-	.word dma1c1_handler
-	.word dma1c2_handler
-	.word dma1c3_handler
-	.word dma1c4_handler
-	.word dma1c5_handler
-	.word dma1c6_handler
-	.word dma1c7_handler
-	.word adc1_handler
-	.word i2c1_ev_handler
-	.word i2c1_er_handler
-	.word usart1_handler
-	.word spi1_handler
-	.word tim1_brk_handler
-	.word tim1_up_handler
-	.word tim1_trgcom_handler
-	.word tim1_cc_handler
-	.word tim2_handler
-_vector_end:
-	.option rvc;
-
-nmi_handler:
-hardfault_handler:
-sw_handler:
-wwdg_handler:
-pvd_handler:
-flash_handler:
-rcc_handler:
-exti70_handler:
-awu_handler:
-dma1c1_handler:
-dma1c2_handler:
-dma1c3_handler:
-dma1c4_handler:
-dma1c5_handler:
-dma1c6_handler:
-dma1c7_handler:
-dma1c7_handler:
-adc1_handler:
-i2c1_ev_handler:
-i2c1_er_handler:
-usart1_handler:
-spi1_handler:
-tim1_brk_handler:
-tim1_up_handler:
-tim1_trgcom_handler:
-tim1_cc_handler:
-tim2_handler:
-	j sysrst
-
-#define wp t0
-#define xp t1
-#define yp t2
-#define rp ra
-#define ip fp
-#define ss s1
+#define wp a0
+#define xp a1
+#define yp a2
+#define tos a3
+#define st a4
+#define ss a5
+#define rp s0
+#define ip s1
 #define up tp
-#define st gp
-
-	.equ addrsize, 4
-
-	.equ tonext, (0 * addrsize)
-	.equ torp, (1 * addrsize)
-	.equ tosp, (2 * addrsize)
-	.equ toip, (3 * addrsize)
-	.equ toss, (4 * addrsize)
-	.equ tost, (5 * addrsize)
-	
-	.equ tasksize, 8
-	.equ dstksize, 21
-	.equ rstksize, 21
-	.equ gapsize,  4
 
 	.equ sscomp, (1 << 0)
 	.equ ssdund, (1 << 1)
 
+	.equ addrsize, 4
+	.equ stksize, 20
+	.equ tasksize, 8
+	.equ tibsize, 31
+
+	.equ RAMBAK_ADDR, 0x3800
+	.equ RAMBAK_SIZE, 0x800
+
+	.equ tip, (0 * addrsize)
+	.equ tss, (1 * addrsize)
+	.equ tsp, (2 * addrsize)
+	.equ tst, (3 * addrsize)
+	.equ trp, (4 * addrsize)
+	.equ tnp, (5 * addrsize)
+
+	.global _start
+_start:
+	.option norvc;
+	j reset
+	.option rvc;
+
 reset:
 	.equ RCC_BASE, 0x40021000
+	.equ RCC_CTLR, 0x00
+	.equ RCC_PLLRDY, (1 << 25)
+	.equ RCC_PLLON, (1 << 24)
+
+        li wp, RCC_BASE
+	lw xp, RCC_CTLR(wp)
+	li yp, RCC_PLLON
+	or xp, xp, yp
+	sw xp, RCC_CTLR(wp)
+	li yp, RCC_PLLRDY
+
+	.macro nop2
+		nop
+		nop
+	.endm
+
+	.macro nop4
+		nop2
+		nop2
+	.endm
+
+	.macro nop8
+		nop4
+		nop4
+	.endm
+
+	.macro nop16
+		nop8
+		nop8
+	.endm
+
+1:
+	nop16
+	lw xp, RCC_CTLR(wp)
+	and xp, xp, yp
+	beqz xp, 1b
+
+
+	.equ RCC_CFGR0, 0x04
+	.equ RCC_SW_MASK, (0x3 << 0)
+	.equ RCC_SW_PLL, (0x2 << 0)
+	lw xp, RCC_CFGR0(wp)
+	li yp, RCC_SW_MASK
+	xori yp, yp, -1
+	and xp, xp, yp
+	ori xp, xp, RCC_SW_PLL
+	sw xp, RCC_CFGR0(wp)
+
+        .equ RCC_HPRE_MASK, (0xF << 4)
+        .equ RCC_HPRE_NODIV, (0 << 4)
+        lw xp, RCC_CFGR0(wp)
+        li yp, RCC_HPRE_MASK
+        xori yp, yp, -1
+        and xp, xp, yp
+        ori xp, xp, RCC_HPRE_NODIV
+        sw xp, RCC_CFGR0(wp)
+
+        .equ RCC_RSTSCKR, 0x24
+        .equ RCC_LSION, (1 << 0)
+        .equ RCC_LSIRDY, (1 << 1)
+        lw xp, RCC_RSTSCKR(wp)
+        or xp, xp, RCC_LSION
+        sw xp, RCC_RSTSCKR(wp)
+
+1:
+        lw xp, RCC_RSTSCKR(wp)
+        andi xp, xp, RCC_LSIRDY
+        beqz xp, 1b
+
+	# SYSCLK: 48Mhz
+	# HCLK:   48Mhz
+	# HSI:    128Khz
+
 	.equ RCC_APB2PCENR, 0x18
 	.equ RCC_AFIOEN, (1 << 0)
 	.equ RCC_IOPAEN, (1 << 2)
 	.equ RCC_IOPDEN, (1 << 5)
 	.equ RCC_USART1EN, (1 << 14)
-
-	li t0, RCC_BASE
-	lw t1, RCC_APB2PCENR(t0)
-	li t2, RCC_AFIOEN | RCC_IOPAEN | RCC_IOPDEN | RCC_USART1EN
-	or t1, t1, t2
-	sw t1, RCC_APB2PCENR(t0)
-
-	.equ RCC_RSTSCKR, 0x24
-	.equ RCC_LSION, (1 << 0)
-	.equ RCC_LSIRDY, (1 << 1)
-	lw t1, RCC_RSTSCKR(t0)
-	or t1, t1, RCC_LSION
-	sw t1, RCC_RSTSCKR(t0)
-
-1:
-	lw t1, RCC_RSTSCKR(t0)
-	andi t1, t1, RCC_LSIRDY
-	beqz t1, 1b
+	lw xp, RCC_APB2PCENR(wp)
+	li yp, RCC_AFIOEN | RCC_IOPAEN | RCC_IOPDEN | RCC_USART1EN
+	or xp, xp, yp
+	sw xp, RCC_APB2PCENR(wp)
 
 	.equ AFIO_BASE, 0x40010000
 	.equ AFIO_PCFR1, 0x04
 	.equ AFIO_UART_MASK, (1 << 21) | (1 << 2)
 	.equ AFIO_UART_D6TX, (1 << 21) | (0 << 2)
-	li t0, AFIO_BASE
-	lw t1, AFIO_PCFR1(t0)
-	li t2, AFIO_UART_MASK
-	xori t2, t2, -1
-	and t1, t1, t2
-	li t2, AFIO_UART_D6TX
-	or t1, t1, t2
-	sw t1, AFIO_PCFR1(t0)
+	li wp, AFIO_BASE
+	lw xp, AFIO_PCFR1(wp)
+	li yp, AFIO_UART_MASK
+	xori yp, yp, -1
+	and xp, xp, yp
+	li yp, AFIO_UART_D6TX
+	or xp, xp, yp
+	sw xp, AFIO_PCFR1(wp)
 
 	.equ GPIOA_BASE, 0x40010800
 	.equ GPIO_CFGLR, 0x00
 	.equ GPIOA2_CFGMASK, (0xF << 8)
-	.equ GPIOA2_PPOUT_2M, (0x2 << 8)
+	.equ GPIOA2_PPOUT_30M, (0x3 << 8)
 	.equ GPIO_OUTDR, 0x0C
 
-	li t0, GPIOA_BASE
-	lw t1, GPIO_CFGLR(t0)
-	li t2, GPIOA2_CFGMASK
-	xori t2, t2, -1
-	and t1, t1, t2
-	ori t1, t1, GPIOA2_PPOUT_2M
-	sw t1, GPIO_CFGLR(t0)
+	li wp, GPIOA_BASE
+	lw xp, GPIO_CFGLR(wp)
+	li yp, GPIOA2_CFGMASK
+	xori yp, yp, -1
+	and xp, xp, yp
+	ori xp, xp, GPIOA2_PPOUT_30M
+	sw xp, GPIO_CFGLR(wp)
 
 	.equ GPIOD_BASE, 0x40011400
 	.equ GPIOD6_CFGMASK, (0xF << 24)
 	.equ GPIOD6_ODOUT_MU_30M, (0xF << 24)
-	li t0, GPIOD_BASE
-	lw t1, GPIO_CFGLR(t0)
-	li t2, GPIOD6_CFGMASK
-	xori t2, t2, -1
-	and t1, t1, t2
-	li t2, GPIOD6_ODOUT_MU_30M
-	or t1, t1, t2
-	sw t1, GPIO_CFGLR(t0)
+	li wp, GPIOD_BASE
+	lw xp, GPIO_CFGLR(wp)
+	li yp, GPIOD6_CFGMASK
+	xori yp, yp, -1
+	and xp, xp, yp
+	li yp, GPIOD6_ODOUT_MU_30M
+	or xp, xp, yp
+	sw xp, GPIO_CFGLR(wp)
 
-	// default:
-	// SYSCLK: HSI 24Mhz
-	// HCLK:   SYSCLK / 3 = 8Mhz
+	// wchlinke max baudrate is 921600
+	// ch32v003 max baudrate is 3000000
 
 	// UART:
 	// HCLK / (16 * UARTDIV) = BAUDRATE
-	// 8Mhz / (16 * 4.34) = 115207
+	// 48Mhz / (16 * 3.255) = 921658
 	// UARTDIV = DIV_M + (DIV_F / 16)
-	// 4.34 = 4 + (5 / 16)
-	// DIV_M = 4
-	// DIV_F = 5
+	// 3.25 = 3 + (4 / 16)
+	// DIV_M = 3
+	// DIV_F = 4
 	.equ UART1_BASE, 0x40013800
 	.equ UART_DATAR, 0x04
 	.equ UART_BRR, 0x08
@@ -185,19 +176,19 @@ reset:
 	.equ UART_CTLR3, 0x14
 	.equ UART_HDSEL, (1 << 3)
 
-	.equ BAUD_9600,   (52 << 4) | (2 << 0)
-	.equ BAUD_115200, (4 << 4) | (5 << 0)
+	.equ BAUD_921600, (3 << 4) | (4 << 0)
+	.equ BAUD_3000000, (1 << 4) | (0 << 0)
 
-	li t0, UART1_BASE
-	li t1, BAUD_115200
-	sw t1, UART_BRR(t0)
-	lw t1, UART_CTLR1(t0)
-	li t2, UART_UE | UART_TE | UART_RE
-	or t1, t1, t2
-	sw t1, UART_CTLR1(t0)
-	lw t1, UART_CTLR3(t0)
-	ori t1, t1, UART_HDSEL
-	sw t1, UART_CTLR3(t0)
+	li wp, UART1_BASE
+	li xp, BAUD_921600
+	sw xp, UART_BRR(wp)
+	lw xp, UART_CTLR1(wp)
+	li yp, UART_UE | UART_TE | UART_RE
+	or xp, xp, yp
+	sw xp, UART_CTLR1(wp)
+	lw xp, UART_CTLR3(wp)
+	ori xp, xp, UART_HDSEL
+	sw xp, UART_CTLR3(wp)
 
 	// IWDG
 	.equ IWDG_BASE, 0x40003000
@@ -210,83 +201,66 @@ reset:
 	.equ IWDG_KEYFEED, 0xAAAA
 	.equ IWDG_KEYUNLOCK, 0x5555
 	.equ IWDG_KEYON, 0xCCCC
-	li t0, IWDG_BASE
-	li t1, IWDG_KEYUNLOCK
-	sh t1, IWDG_CTLR_R16(t0)
+	li wp, IWDG_BASE
+	li xp, IWDG_KEYUNLOCK
+	sh xp, IWDG_CTLR_R16(wp)
 
 	.equ IWDG_DIVMASK, 0x7
-	.equ IWDG_DIV4, 0x0
-	.equ IWDG_DIV8, 0x1
-	.equ IWDG_DIV64, 0x4
 	.equ IWDG_DIV256, 0x6
 1:
-	lhu t1, IWDG_STATR_R16(t0)
-	andi t1, t1, IWDG_PVU
-	bnez t1, 1b
+	lhu xp, IWDG_STATR_R16(wp)
+	andi xp, xp, IWDG_PVU
+	bnez xp, 1b
 
-	li t2, IWDG_DIVMASK
-	xori t2, t2, -1
-	lhu t1, IWDG_PSCR_R16(t0)
-	and t1, t1, t2
-	li t2, IWDG_DIV256
-	or t1, t1, t2
-	sh t1, IWDG_PSCR_R16(t0)
+	li yp, IWDG_DIVMASK
+	xori yp, yp, -1
+	lhu xp, IWDG_PSCR_R16(wp)
+	and xp, xp, yp
+	li yp, IWDG_DIV256
+	or xp, xp, yp
+	sh xp, IWDG_PSCR_R16(wp)
 
 1:
-	lw t1, IWDG_STATR_R16(t0)
-	andi t1, t1, IWDG_RVU
-	bnez t1, 1b
+	lw xp, IWDG_STATR_R16(wp)
+	andi xp, xp, IWDG_RVU
+	bnez xp, 1b
 
-	li t1, -1
-	sh t1, IWDG_RLDR_R16(t0)
+	li xp, -1
+	sh xp, IWDG_RLDR_R16(wp)
 
-
-	// IRQ
-	la t0, _vector
-	la t1, _ram_vector
-	la t2, _vector_end
-
-	// copy vector table
-2:
-	bge t0, t2, 1f
-	lw a0, 0(t0)
-	sw a0, 0(t1)
-	addi t0, t0, addrsize
-	addi t1, t1, addrsize
-	j 2b
-1:
-	// set vector table address
-	la t0, _ram_vector
-	ori t0, t0, 0x3
-	csrw mtvec, t0
+	// set vector
+	la wp, _ram_entry
+	ori wp, wp, 0x2
+	csrw mtvec, wp
 
 	// enable global interrupt and configure privileged mode
-	li t0, 0x1880
-	csrw mstatus, t0
+	li wp, 0x1880
+	csrw mstatus, wp
 	// not enable hardware stack, mainline gcc compiler not suppot this
 	// not enable interrupt nesting
 
-        .equ PFIC_BASE, 0xE000E000
-	.equ PFIC_IENR1,0x100
-	.equ IRQ_STK, 12
-	li t0, PFIC_BASE
-	lw t1, PFIC_IENR1(t0)
-	li t2, (1 << IRQ_STK)
-	or t1, t1, t2
-	sw t1, PFIC_IENR1(t0)
-	.equ PFIC_IENR2,0x104
-	.equ IRQ_UART1, 0
-	lw t1, PFIC_IENR2(t0)
-	li t2, (1 << IRQ_UART1)
-	or t1, t1, t2
-	sw t1, PFIC_IENR2(t0)
+	// PFIC
+	.equ PFIC_BASE, 0xE000E000
+        .equ PFIC_IENR1,0x100
+        .equ IRQ_STK, 12
+        li wp, PFIC_BASE
+        lw xp, PFIC_IENR1(wp)
+        li yp, (1 << IRQ_STK)
+        or xp, xp, yp
+        sw xp, PFIC_IENR1(wp)
+        .equ PFIC_IENR2,0x104
+        .equ IRQ_UART1, 0
+        lw xp, PFIC_IENR2(wp)
+        li yp, (1 << IRQ_UART1)
+        or xp, xp, yp
+        sw xp, PFIC_IENR2(wp)
 
-	// systick
-	.equ STK_BASE, 0xE000F000
-	.equ STK_CTLR, 0x00
-	.equ STK_SR,   0x04
-	.equ STK_CNTL, 0x08
-	.equ STK_CMPLR,0x10
+        // systick
+        .equ STK_BASE, 0xE000F000
+        .equ STK_CTLR, 0x00
+        .equ STK_SR,   0x04
+        .equ STK_CNTL, 0x08
+        .equ STK_CMPLR,0x10
 
         .equ STK_SWIE, (1 << 31)
         .equ STK_STRE, (1 << 3)
@@ -295,288 +269,288 @@ reset:
         .equ STK_STIE, (1 << 1)
         .equ STK_STEN, (1 << 0)
 
-	// jump to forth
-	la t0, forth
-	csrw mepc, t0
-	mret
-
-systick_handler:
-	li a5, STK_BASE
-	sw zero, STK_SR(a5)
-
-	la a5, systick_count
-	lw a4, 0(a5)
-	li a3, -1
-	beq a4, a3, 1f
-	addi a4, a4, 1
-	sw a4, 0(a5)
-	j 2f
-1:
-	sw zero, 0(a5)
-	lw a4, addrsize(a5)
-	addi a4, a4, 1
-	sw a4, addrsize(a5)
-2:
-
-/*
-	li a5, GPIOA_BASE
-	lw a4, GPIO_OUTDR(a5)
-	xori a4, a4, (1 << 2)
-	sw a4, GPIO_OUTDR(a5)
-*/
-	mret
-
-	// ch32v003 :
-	// 0x00000000 ~ 0x00003FFF   ROM 16KiB
-	// 0x20000000 ~ 0x200007FF   RAM 2KiB
-	// 0x00003FFF | 0x200007FF = 0x20003FFF
-	// 4byte align
-	// 0x20003FFF & ~(0x3) = 0x20003FFC
-	//       FEDCBA9876543210FEDCBA9876543210
-	//     0b00100000000000000011111111111100
-	//          |-----15------||-----12---||\
-	// link             |len|              |attr|
-	// entr             |off|
-
-	.equ addrmask,  (0x20003FFC)
-	.equ nlenshift, (16)
-	.equ offtshift, (16)
-	.equ attrmask,  (0x03)
-	.equ nlenmask,  ((0x1F) << nlenshift)
-	.equ offtmask,  ((0x1F) << offtshift)
-
-	// gnu assmbler only support '+' '-' '<<' '>>' in expression
-	// not supoort '&' '|', we use '+' instead '|'
-
-	.set lastword, 0
-
-	.equ attrnone, 0
-	.equ attrimmd, (1 << 0)
-	.equ attrhide, (1 << 1)
-
-	.macro defcode label, name, link, attr
-		.p2align 2, 0
-	l_\label:
-		.word \link + nlen_\label + \attr
-	f_\label:
-		.word a_\label + offt_\label
-	n_\label:
-		.ascii "\name"
-	n_end_\label:
-		.p2align 2, 0
-		.set nlen_\label, ((n_end_\label - n_\label) << nlenshift)
-		.set offt_\label, ((a_\label - f_\label) << offtshift)
-		.set lastword, f_\label
-	a_\label:
-	.endm
-
-	defcode uuu, "uuu", 0, attrnone
-	li wp, UART1_BASE
-	li xp, 0x55 // U
-1:
-	sw xp, UART_DATAR(wp)
-	j 1b
-
-	defcode fail, "fail", f_uuu, attrnone
-	li wp, UART1_BASE
-	li xp, 0x07 // bell
-1:
-	sw xp, UART_DATAR(wp)
-	j 1b
-
-	defcode next, "next", f_fail, attrnone
-	li yp, addrmask
-	lw wp, 0(ip)
-	and wp, wp, yp
-	addi ip, ip, addrsize
-	lw xp, 0(wp)
-	and xp, xp, yp
-	jr xp
+	.equ ESIG_BASE, 0x1FFFF700
+	.equ ESIG_UNIID1, 0xE8
+	.equ ESIG_UNIID2, 0xEC
+	.equ ESIG_UNIID3, 0xF0
 
 	.macro next
 		j a_next
 	.endm
 
-	.macro rpush reg
-		sw \reg, 0(rp)
-		addi rp, rp, -addrsize
-	.endm
+	.equ sram_base, 0x20000000
+	.equ sram_size, (2 * 1024)
 
-	defcode call, "call", f_next, attrnone
-	rpush ip
-	li yp, offtmask
-	lw xp, 0(wp)
-	and ip, xp, yp
-	srli ip, ip, offtshift
-	add ip, ip, wp
-	next
+	li wp, sram_base
+	li xp, sram_size
+	li yp, -1
 
-	.macro rpop reg
-		addi rp, rp, addrsize
-		lw \reg, 0(rp)
-	.endm
+	// fill 0xFF into sram
+2:
+	beqz xp, 1f
+	sw yp, 0(wp)
+	addi wp, wp, addrsize
+	addi xp, xp, -addrsize
+	j 2b
+1:
 
-	defcode exit, "exit", f_call, attrnone
-	rpop ip
-	next
+	la wp, ycount
+	sw zero, 0(wp)
 
-        .macro defword label, name, link, attr
-		.p2align 2, 0
-	l_\label:
-		.word \link + nlen_\label + \attr
-        f_\label:
-                .word a_call + offt_\label
-        n_\label:
-                .ascii "\name"
-        n_end_\label:
-                .p2align 2, 0
-                .set nlen_\label, ((n_end_\label - n_\label) << nlenshift)
-                .set offt_\label, ((w_\label - f_\label) << offtshift)
+	la wp, irqcount
+	sw zero, 0(wp)
+
+	la wp, mscountl
+	sw zero, 0(wp)
+	la wp, mscounth
+	sw zero, 0(wp)
+
+	la wp, _ram_entry
+	la xp, irq_handler
+	sw xp, 0(wp)
+
+
+        // jump to forth
+	la wp, forth
+	csrw mepc, wp
+	mret
+
+	.set lastword, 0
+
+	.equ link_mask, (0x20003FFC)
+	.equ nlen_shift, 16
+	.equ nlen_mask, (0xF << nlen_shift)
+	.equ attr_immed, (1 << 0)
+	.macro wdef label, name, entry, link, attr
+		.p2align 2, 0xFF
+	h_\label:
+		.word \link + nlen_shift_\label + \attr
+	f_\label:
+		.word \entry
+	n_\label:
+		.ascii "\name"
+	n_end_\label:
+		.set nlen_\label, (n_end_\label - n_\label)
+		.set nlen_shift_\label, (nlen_\label << nlen_shift)
 		.set lastword, f_\label
-        w_\label:
-        .endm
+		.p2align 2, 0xFF
+	p_\label:
+	.endm
 
-	defword noop, "noop", f_exit, attrnone
+
+	.equ UART_STATR, 0x00
+	.equ UART_TC, (1 << 6)
+early_txc:
+	li wp, UART1_BASE
+1:
+	lw xp, UART_STATR(wp)
+	andi xp, xp, UART_TC
+	beqz xp, 1b
+	sw tos, UART_DATAR(wp)
+	ret
+
+	wdef fail, "fail", a_fail, 0, 0
+a_fail:
+	li tos, 'F'
+	call early_txc
+	li tos, 'A'
+	call early_txc
+	li tos, 'I'
+	call early_txc
+	li tos, 'L'
+	call early_txc
+1:
+	j 1b
+
+	wdef okay, "okay", a_okay, f_fail, 0
+a_okay:
+	li tos, 'O'
+	call early_txc
+	li tos, 'K'
+	call early_txc
+1:
+	j 1b
+
+	wdef next, "next", a_next, f_okay, 0
+a_next:
+	lw wp, 0(ip)
+	addi ip, ip, addrsize
+	lw xp, 0(wp)
+	jr xp
+
+dpop:
+	addi sp, sp, addrsize
+	ble sp, st, 1f
+	ori ss, ss, ssdund
+1:
+	lw tos, 0(sp)
+	ret
+
+dpush:
+	sw tos, 0(sp)
+	addi sp, sp, -addrsize
+	ret
+
+rpop:
+	addi rp, rp, addrsize
+	lw tos, 0(rp)
+	ret
+
+rpush:
+	sw tos, 0(rp)
+	addi rp, rp, -addrsize
+	ret
+
+	wdef call, "call", a_call, f_next, 0
+a_call:
+	mv tos, ip
+	call rpush
+	lw xp, -addrsize(wp)
+	li yp, nlen_mask
+	and xp, xp, yp
+	srli xp, xp, nlen_shift
+	addi xp, xp, ((-1) + addrsize + addrsize)
+	andi xp, xp, -addrsize
+	add ip, wp, xp
+	next
+
+	wdef exit, "exit", a_exit, f_call, 0
+a_exit:
+	call rpop
+	mv ip, tos
+	next
+
+	wdef noop, "noop", a_call, f_exit, 0
 	.word f_exit
 
-	.macro dpush reg
-		sw \reg , 0(sp)
-		addi sp, sp, -addrsize
-	.endm
+	wdef branch, "branch", a_branch, f_noop, 0
+a_branch:
+	lw ip, 0(ip)
+	next
 
-	defcode lit, "lit", f_noop, attrnone
-	lw xp, 0(ip)
-	dpush xp
+	wdef branch0, "branch0", a_branch0, f_branch, 0
+a_branch0:
+	call dpop
+	bnez tos, 1f
+	lw ip, 0(ip)
+	next
+1:
 	addi ip, ip, addrsize
 	next
 
-	defcode 2lit, "2lit", f_lit, attrnone
-	lw xp, 0(ip)
-	dpush xp
-	addi ip, ip, addrsize
-	lw xp, 0(ip)
-	dpush xp
+	wdef lit, "lit", a_lit, f_branch0, 0
+a_lit:
+	lw tos, 0(ip)
+	call dpush
 	addi ip, ip, addrsize
 	next
 
-	.macro dschk
-		ble sp, st, 66f
-		ori ss, ss, ssdund
-	66:
-	.endm
+tasksave:
+	sw ip, tip(up)
+	sw ss, tss(up)
+	sw sp, tsp(up)
+	sw st, tst(up)
+	sw rp, trp(up)
+	ret
 
-	.macro dpop reg
-		addi sp, sp, addrsize
-		dschk
-		lw \reg, 0(sp)
-	.endm
+taskload:
+	lw ip, tip(up)
+	lw ss, tss(up)
+	lw sp, tsp(up)
+	lw st, tst(up)
+	lw rp, trp(up)
+	ret
 
-	defcode branch0, "branch0", f_2lit, attrnone
-	dpop xp
-	lw yp, 0(ip)
-	addi ip, ip, addrsize
+	wdef yield, "yield", a_yield, f_lit, 0
+a_yield:
+	call tasksave
+	la wp, ycount
+	lw xp, 0(wp)
+	addi xp, xp, 1
+	sw xp, 0(wp)
+	lw up, tnp(up)
+	call taskload
+	next
+
+	wdef txava, "tx?", a_txava, f_yield, 0
+a_txava:
+	li wp, UART1_BASE
+	lw xp, UART_STATR(wp)
+	andi xp, xp, UART_TC
 	bnez xp, 1f
-	mv ip, yp
-1:
-	next
-
-	defcode equ, "=", f_branch0, attrnone
-	dpop xp
-	dpop yp
-	beq xp, yp, 1f
-	dpush zero
+	mv tos, zero
+	call dpush
 	next
 1:
-	li xp, -1
-	dpush xp
+	li tos, -1
+	call dpush
 	next
 
-	defcode doconst, "doconst", f_equ, attrnone
-	li yp, offtmask
-	lw xp, 0(wp)
-	and xp, xp, yp
-	srli xp, xp, offtshift
-	add wp, wp, xp
-	lw xp, 0(wp)
-	dpush xp
+	wdef drop, "drop", a_drop, f_txava, 0
+a_drop:
+	call dpop
 	next
 
-        .macro defconst, label, name, link, attr
-		.p2align 2, 0
-		.set attr_\label, \attr
-	l_\label:
-		.word \link + nlen_\label + \attr
-        f_\label:
-                .word a_doconst + offt_\label
-        n_\label:
-                .ascii "\name"
-        n_end_\label:
-                .p2align 2, 0
-                .set nlen_\label, ((n_end_\label - n_\label) << nlenshift)
-                .set offt_\label, ((v_\label - f_\label) << offtshift)
-		.set lastword, f_\label
-        v_\label:
-        .endm
-
-	defconst cell, "cell", f_doconst, attrnone
-	.word addrsize
-
-	defcode depth, "depth", f_cell, attrnone
-	sub xp, st, sp
-	srli xp, xp, 2 // div 4
-	dpush xp
+	wdef dup, "dup", a_dup, f_drop, 0
+a_dup:
+	call dpop
+	call dpush
+	call dpush
 	next
 
-	defword dzchk, "dzchk", f_depth, attrnone
-	.word f_depth
+	wdef equ, "=", a_equ, f_dup, 0
+a_equ:
+	call dpop
+	mv wp, tos
+	call dpop
+	beq wp, tos, 1f
+	mv tos, zero
+	call dpush
+	next
+1:
+	li tos, -1
+	call dpush
+	next
+
+	wdef 2lit, "2lit", a_2lit, f_equ, 0
+a_2lit:
+	lw tos, 0(ip)
+	call dpush
+	addi ip, ip, addrsize
+	lw tos, 0(ip)
+	call dpush
+	addi ip, ip, addrsize
+	next
+
+	wdef failez, "failez", a_call, f_2lit,0
+	.word f_lit
+	.word 0
+	.word f_equ
 	.word f_branch0
 	.word 1f
 	.word f_fail
 1:
 	.word f_exit
 
-	.macro taskload
-		lw rp, torp(up)
-		lw sp, tosp(up)
-		lw ip, toip(up)
-		lw ss, toss(up)
-		lw st, tost(up)
-	.endm
-
-	.macro tasksave
-		sw rp, torp(up)
-		sw sp, tosp(up)
-		sw ip, toip(up)
-		sw ss, toss(up)
-		sw st, tost(up)
-	.endm
-
-	defcode yield, "yield", f_dzchk, attrnone
-	tasksave
-	lw wp, tonext(up)
-	mv up, wp
-	la wp, yield_count
-	lw xp, 0(wp)
-	addi xp, xp, 1
-	sw xp, 0(wp)
-	taskload
-	next
-
-	defcode txava, "tx?", f_yield, attrnone
-	li wp, UART1_BASE
-	.equ UART_STATR, 0x00
-	.equ UART_TC, (1 << 6)
-	lw xp, UART_STATR(wp)
-	andi xp, xp, UART_TC
-	beqz xp, 1f
-	li xp, -1
-	dpush xp
-	next
+	wdef failnz, "failnz", a_call, f_failez, 0
+	.word f_lit
+	.word 0
+	.word f_equ
+	.word f_branch0
+	.word 1f
+	.word f_exit
 1:
-	dpush zero
+	.word f_fail
+	.word f_exit
+
+	wdef txfill, "txfill", a_txfill, f_failnz, 0
+a_txfill:
+	li wp, UART1_BASE
+	call dpop
+	sw tos, UART_DATAR(wp)
 	next
 
-	defword txwait, "txwait", f_txava, attrnone
+	wdef txwait, "txwait", a_call, f_txfill, 0
 1:
 	.word f_yield
 	.word f_txava
@@ -584,496 +558,71 @@ systick_handler:
 	.word 1b
 	.word f_exit
 
-	defcode txfill, "txfill", f_txwait, attrnone
-
-	li wp, UART1_BASE
-	dpop xp
-	sw xp, UART_DATAR(wp)
-	next
-
-	defword tx, "tx", f_txfill, attrnone
+	wdef txc, "txc", a_call, f_txwait, 0
 	.word f_txwait
 	.word f_txfill
+	.word f_txwait
 	.word f_exit
 
-	defword emit, "emit", f_tx, attrnone
-	.word f_tx
+	wdef emit, "emit", a_call, f_txc, 0
+	.word f_txc
 	.word f_exit
 
-	defcode rxava, "rx?", f_emit, attrnone
-
-	li wp, UART1_BASE
-	.equ UART_RXNE, (1 << 5)
-	lw xp, UART_STATR(wp)
-	andi xp, xp, UART_RXNE
-	beqz xp, 1f
-	li xp, -1
-	dpush xp
-	next
-1:
-	dpush zero
+	wdef add, "+", a_add, f_emit, 0
+a_add:
+	call dpop
+	mv wp, tos
+	call dpop
+	add tos, tos, wp
+	call dpush
 	next
 
-	defword rxwait, "rxwait", f_rxava, attrnone
-1:
-	.word f_yield
-	.word f_rxava
-	.word f_branch0
-	.word 1b
-	.word f_exit
-
-	defcode rxread, "rxread", f_rxwait, attrnone
-	li wp, UART1_BASE
-	lw xp, UART_DATAR(wp)
-	dpush xp
-	li wp, GPIOA_BASE
-	next
-
-	defword rx, "rx", f_rxread, attrnone
-	.word f_rxwait
-	.word f_rxread
-	.word f_exit
-
-	defcode num2hex, "num2hex", f_rx, attrnone
-	dpop wp
-	andi wp, wp, 0xF
-	la xp, xdigits
-	add xp, xp, wp
-	lbu wp, 0(xp)
-	dpush wp
-	next
-
-xdigits:
-	.ascii "0123456789ABCDEF"
-	.p2align 2, 0
-
-	defword hex4, "hex4", f_num2hex, attrnone
-	.word f_num2hex
-	.word f_emit
-	.word f_exit
-
-	defcode rshift, "rshift", f_hex4, attrnone
-	dpop wp
-	dpop xp
-	srl xp, xp, wp
-	dpush xp
-	next
-
-	defcode dup, "dup", f_rshift, attrnone
-	dpop wp
-	dpush wp
-	dpush wp
-	next
-
-	defword hex8, "hex8", f_dup, attrnone
-	.word f_dup
+	wdef inc, "1+", a_call, f_add, 0
 	.word f_lit
-	.word 4
-	.word f_rshift
-	.word f_hex4
-	.word f_hex4
-	.word f_exit
-
-	defword hex16, "hex16", f_hex8, attrnone
-	.word f_dup
-	.word f_lit
-	.word 8
-	.word f_rshift
-	.word f_hex8
-	.word f_hex8
-	.word f_exit
-
-	defword hex32, "hex32", f_hex16, attrnone
-	.word f_dup
-	.word f_lit
-	.word 16
-	.word f_rshift
-	.word f_hex16
-	.word f_hex16
-	.word f_exit
-
-	defcode spget, "sp@", f_hex32, attrnone
-	dpush sp
-	next
-
-	defcode stget, "st@", f_spget, attrnone
-	dpush st
-	next
-
-	defcode load, "@", f_stget, attrnone
-	dpop wp
-	lw xp, 0(wp)
-	dpush xp
-	next
-
-	defcode sub, "-", f_load, attrnone
-	dpop wp
-	dpop xp
-	sub xp, xp, wp
-	dpush xp
-	next
-
-	defcode eqz, "0=", f_sub, attrnone
-	dpop wp
-	beqz wp, 1f
-	dpush zero
-	next
-1:
-	li wp, -1
-	dpush wp
-	next
-
-	defcode drop, "drop", f_eqz, attrnone
-	dpop wp
-	next
-
-	defcode swap, "swap", f_drop, attrnone
-	dpop wp
-	dpop xp
-	dpush wp
-	dpush xp
-	next
-
-	defcode over, "over", f_swap, attrnone
-	dpop wp
-	dpop xp
-	dpush xp
-	dpush wp
-	dpush xp
-	next
-
-	defcode branch, "branch", f_over, attrnone
-	lw xp, 0(ip)
-	mv ip, xp
-	next
-
-	defcode dec, "1-", f_branch, attrnone
-	dpop xp
-	addi xp, xp, -1
-	dpush xp
-	next
-
-	defcode 2drop, "2drop", f_dec, attrnone
-	dpop xp
-	dpop xp
-	next
-
-	defword dsdump, ".s", f_2drop, attrnone
-	.word f_lit
-	.word '('
-	.word f_emit
-	.word f_depth
-	.word f_hex16
-	.word f_lit
-	.word ')'
-	.word f_emit
-
-	.word f_depth
-	.word f_stget
-2:
-	.word f_over
-	.word f_branch0
-	.word 1f
-
-	.word f_dup
-	.word f_load
-	.word f_hex32
-	.word f_lit
-	.word ' '
-	.word f_emit
-
-	.word f_cell
-	.word f_sub
-	.word f_swap
-	.word f_dec
-	.word f_swap
-
-	.word f_branch
-	.word 2b
-
-1:
-	.word f_2drop
-	.word f_exit
-
-	defword isspace, "isspace", f_dsdump, attrnone
-	.word f_lit
-	.word ' '
-	.word f_equ
-	.word f_exit
-
-	defcode or, "or", f_isspace, attrnone
-	dpop wp
-	dpop xp
-	or wp, wp, xp
-	dpush wp
-	next
-
-	defword isnewline, "isnewline", f_or, attrnone
-	.word f_dup
-	.word f_lit
-	.word '\n'
-	.word f_equ
-	.word f_swap
-	.word f_lit
-	.word '\r'
-	.word f_equ
-	.word f_or
-	.word f_exit
-
-	defconst toin, ">in", f_isnewline, attrnone
-	.word toin
-
-	defconst tib, "tib", f_toin, attrnone
-	.word tib
-
-	.equ ROM_BASE, 0x0
-	defconst rombase, "rombase", f_tib, attrnone
-	.word ROM_BASE
-
-	.equ ROM_TOP, 0x4000
-	defconst romtop, "romtop", f_rombase, attrnone
-	.word ROM_TOP
-
-	defcode mem32store, "mem32!", f_romtop, 0
-	dpop wp
-	dpop xp
-	sw xp, 0(wp)
-	next
-
-	defword store, "!", f_mem32store, 0
-	.word f_dup
-	.word f_rombase
-	.word f_romtop
-	.word f_within
-	.word f_branch0
-	.word 1f
-	.word f_rom32store
-	.word f_exit
-1:
-	.word f_mem32store
-	.word f_exit
-
-	defword toinrst, ">inrst", f_store, attrnone
-	.word f_lit
-	.word 0
-	.word f_toin
-	.word f_store
-	.word f_exit
-
-	defcode cstore, "c!", f_toinrst, attrnone
-	dpop wp
-	dpop xp
-	sb xp, 0(wp)
-	next
-
-	defcode cload, "c@", f_cstore, attrnone
-	dpop wp
-	lbu xp, 0(wp)
-	dpush xp
-	next
-
-	defcode inc, "1+", f_cload, attrnone
-	dpop wp
-	addi wp, wp, 1
-	dpush wp
-	next
-
-	defcode toinmax, ">inmax", f_inc, attrnone
-	la wp, tib_end
-	la xp, tib
-	sub wp, wp, xp
-	dpush wp
-	next
-
-	defcode lt, "<", f_toinmax, attrnone
-	dpop wp
-	dpop xp
-	blt xp, wp, 1f
-	dpush zero
-	next
-1:
-	li xp, -1
-	dpush xp
-	next
-
-	defcode gt, ">", f_lt, attrnone
-	dpop wp
-	dpop xp
-	bgt xp, wp, 1f
-	dpush zero
-	next
-1:
-	li xp, -1
-	dpush xp
-	next
-
-	defword 2dup, "2dup", f_gt, attrnone
-	.word f_over
-	.word f_over
-	.word f_exit
-
-	defcode rot, "rot",f_2dup, attrnone
-	dpop wp
-	dpop xp
-	dpop yp
-	dpush xp
-	dpush wp
-	dpush yp
-	next
-
-	defcode ge, ">=", f_rot, attrnone
-	dpop wp
-	dpop xp
-	bge xp, wp, 1f
-	dpush zero
-	next
-1:
-	li xp, -1
-	dpush xp
-	next
-
-	defcode and, "and", f_ge, attrnone
-	dpop wp
-	dpop xp
-	and wp, wp, xp
-	dpush wp
-	next
-
-	defcode le, "<=", f_rot, attrnone
-	dpop wp
-	dpop xp
-	ble xp, wp, 1f
-	dpush zero
-	next
-1:
-	li xp, -1
-	dpush xp
-	next
-
-	defcode within, "within", f_and, attrnone
-	dpop wp // max
-	dpop xp // min
-	dpop yp // n
-	blt yp, wp, 1f
-	dpush zero
-	next
-1:
-	bge yp, xp, 2f
-	dpush zero
-	next
-2:
-	li xp, -1
-	dpush xp
-	next
-
-	defword toinchk, ">inchk", f_within, attrnone
-	.word f_toin
-	.word f_load
-	.word f_lit
-	.word 0
-	.word f_toinmax
-	.word f_within
-	.word f_exit
-
-	defcode add, "+", f_toinchk, attrnone
-	dpop xp
-	dpop wp
-	add wp, wp, xp
-	dpush wp
-	next
-
-	defword tipush, "tipush", f_add, attrnone
-	.word f_tib
-	.word f_toin
-	.word f_load
+	.word 1
 	.word f_add
-	.word f_cstore
-	.word f_toin
-	.word f_load
-	.word f_inc
-	.word f_toin
-	.word f_store
-	.word f_toinchk
-	.word f_branch0
-	.word 1f
-	.word f_exit
-1:
-	.word f_toinrst
 	.word f_exit
 
-	defword tidrop, "tidrop", f_tipush, attrnone
-	.word f_toin
-	.word f_load
-	.word f_dec
-	.word f_toin
-	.word f_store
-	.word f_toinchk
-	.word f_branch0
-	.word 1f
-	.word f_exit
-1:
-	.word f_toinrst
-	.word f_exit
+	wdef sub, "-", a_sub, f_inc, 0
+a_sub:
+	call dpop
+	mv wp, tos
+	call dpop
+	sub tos, tos, wp
+	call dpush
+	next
 
-	defword key, "key", f_tidrop, attrnone
-	.word f_rx
-	.word f_exit
-
-	defword isdelete, "isdelete", f_key, attrnone
-	.word f_dup
+	wdef dec, "1-", a_call, f_sub, 0
 	.word f_lit
-	.word '\b'
-	.word f_equ
-	.word f_swap
-	.word f_lit
-	.word 0x7F
-	.word f_equ
-	.word f_or
+	.word 1
+	.word f_sub
 	.word f_exit
 
-	defword newline, "newline", f_isdelete, attrnone
-	.word f_2lit
-	.word '\n'
-	.word '\r'
-	.word f_emit
-	.word f_emit
-	.word f_exit
+	wdef cload, "c@", a_cload, f_dec, 0
+a_cload:
+	call dpop
+	lbu tos, 0(tos)
+	call dpush
+	next
 
-	defword token, "token", f_newline, attrnone
-token_loop:
-	.word f_key
-
-	.word f_dup
-	.word f_isspace
-	.word f_branch0
-	.word 1f
+	wdef 2drop, "2drop", a_call, f_cload, 0
+	.word f_drop
 	.word f_drop
 	.word f_exit
-1:
 
-	.word f_dup
-	.word f_isnewline
-	.word f_branch0
-	.word 2f
-	.word f_drop
-	.word f_newline
-	.word f_exit
-2:
+	wdef swap, "swap", a_swap, f_2drop, 0
+a_swap:
+	call dpop
+	mv wp, tos
+	call dpop
+	mv xp, tos
+	mv tos, wp
+	call dpush
+	mv tos, xp
+	call dpush
+	next
 
-	.word f_dup
-	.word f_isdelete
-	.word f_branch0
-	.word 3f
-	.word f_drop
-	.word f_tidrop
-	.word f_branch
-	.word token_loop
-3:
-	.word f_tipush
-	.word f_branch
-	.word token_loop
-
-	defword type, "type", f_token, attrnone
+	wdef type, "type", a_call, f_swap, 0
 2:
 	.word f_dup
 	.word f_branch0
@@ -1091,124 +640,526 @@ token_loop:
 	.word f_2drop
 	.word f_exit
 
-	defcode min, "min", f_type, attrnone
-	dpop wp
-	dpop xp
-	blt wp, xp, 1f
-	dpush xp
-	next
-1:
-	dpush wp
+	wdef stget, "st@", a_stget, f_type, 0
+a_stget:
+	mv tos, st
+	call dpush
 	next
 
-	defconst true, "true", f_min, attrnone
-	.word -1
-
-	defconst false, "false", f_true, attrnone
-	.word 0
-
-	defcode tor, ">r", f_false, attrnone
-	dpop wp
-	rpush wp
+	wdef spget, "sp@", a_spget, f_stget, 0
+a_spget:
+	mv tos, sp
+	call dpush
 	next
 
-	defcode fromr, "r>", f_tor, attrnone
-	rpop wp
-	dpush wp
+	wdef doconst, "doconst", a_doconst, f_spget, 0
+a_doconst:
+        lw xp, -addrsize(wp)
+        li yp, nlen_mask
+        and xp, xp, yp
+        srli xp, xp, nlen_shift
+        addi xp, xp, ((-1) + addrsize + addrsize)
+        andi xp, xp, -addrsize
+        add wp, wp, xp
+	lw tos, 0(wp)
+	call dpush
+        next
+
+	wdef cell, "cell", a_doconst, f_doconst, 0
+	.word addrsize
+
+	wdef dzchk, "dzchk", a_dzchk, f_cell, 0
+a_dzchk:
+	bne sp, st, a_fail
+	andi ss, ss, ssdund
+	bnez ss, a_fail
 	next
 
-	defword 2swap, "2swap", f_false, attrnone
-	.word f_rot
-	.word f_tor
-	.word f_rot
-	.word f_fromr
+	wdef rshift, "rshift", a_rshift, f_dzchk, 0
+a_rshift:
+	call dpop
+	mv wp, tos
+	call dpop
+	srl tos, tos, wp
+	call dpush
+	next
+
+	wdef 2div, "2/", a_call, f_rshift, 0
+	.word f_lit
+	.word 1
+	.word f_rshift
 	.word f_exit
 
-	defword compare, "compare", f_2swap, attrnone
+	wdef celldiv, "cell/", a_call, f_2div, 0
+	.word f_lit
+	.word 2
+	.word f_rshift
+	.word f_exit
+
+	wdef depth, "depth", a_call, f_celldiv, 0
+	.word f_spget
+	.word f_stget
+	.word f_swap
+	.word f_sub
+	.word f_celldiv
+	.word f_exit
+
+	wdef and, "and", a_and, f_depth, 0
+a_and:
+	call dpop
+	mv wp, tos
+	call dpop
+	and tos, tos, wp
+	call dpush
+	next
+
+xdigits:
+	.ascii "0123456789ABCDEF"
+	.p2align 2, 0
+
+	wdef num2hex, "num2hex", a_call, f_and, 0
+	.word f_lit
+	.word 0xF
+	.word f_and
+	.word f_lit
+	.word xdigits
+	.word f_add
+	.word f_cload
+	.word f_exit
+
+	wdef hex4, "hex4", a_call, f_num2hex, 0
+	.word f_num2hex
+	.word f_emit
+	.word f_exit
+
+	wdef hex8, "hex8", a_call, f_hex4, 0
+	.word f_dup
+	.word f_lit
+	.word 4
+	.word f_rshift
+	.word f_hex4
+	.word f_hex4
+	.word f_exit
+
+	wdef hex16, "hex16", a_call, f_hex8, 0
+	.word f_dup
+	.word f_lit
+	.word 8
+	.word f_rshift
+	.word f_hex8
+	.word f_hex8
+	.word f_exit
+
+	wdef hex32, "hex32", a_call, f_hex16, 0
+	.word f_dup
+	.word f_lit
+	.word 16
+	.word f_rshift
+	.word f_hex16
+	.word f_hex16
+	.word f_exit
+
+	wdef load, "@", a_load, f_hex32, 0
+a_load:
+	call dpop
+	lw tos, 0(tos)
+	call dpush
+	next
+
+	wdef dsdump, ".s", a_call, f_load, 0
+	.word f_depth
+	.word f_lit
+	.word '('
+	.word f_emit
+	.word f_hex8
+	.word f_lit
+	.word ')'
+	.word f_emit
+
+	.word f_depth
+	.word f_stget
+	.word f_swap
+2:
+	.word f_dup
+	.word f_branch0
+	.word 1f
+	.word f_dec
+	.word f_swap
+	.word f_dup
+	.word f_load
+	.word f_hex32
+	.word f_lit
+	.word ' '
+	.word f_emit
+	.word f_cell
+	.word f_sub
+	.word f_swap
+	.word f_branch
+	.word 2b
+1:
+	.word f_2drop
+	.word f_exit
+
+	wdef rxava, "rx?", a_rxava, f_dsdump, 0
+a_rxava:
+	.equ UART_RXNE, (1 << 5)
+	li wp, UART1_BASE
+	lw xp, UART_STATR(wp)
+	andi xp, xp, UART_RXNE
+	bnez xp, 1f
+	mv tos, zero
+	call dpush
+	next
+1:
+	li tos, -1
+	call dpush
+	next
+
+	wdef rxwait, "rxwait", a_call, f_rxava, 0
+1:
+	.word f_yield
+	.word f_rxava
+	.word f_branch0
+	.word 1b
+	.word f_exit
+
+	wdef rxread, "rxread", a_rxread, f_rxwait, 0
+a_rxread:
+	li wp, UART1_BASE
+	lw tos, UART_DATAR(wp)
+	call dpush
+	next
+
+	wdef rxc, "rxc", a_call, f_rxread, 0
+	.word f_rxwait
+	.word f_rxread
+	.word f_exit
+
+	wdef key, "key", a_call, f_rxc, 0
+	.word f_rxc
+	.word f_exit
+
+	wdef or, "or", a_or, f_key, 0
+a_or:
+	call dpop
+	mv wp, tos
+	call dpop
+	or tos, tos, wp
+	call dpush
+	next
+
+	wdef isnl, "isnl", a_call, f_or, 0
+	.word f_dup
+	.word f_lit
+	.word '\n'
+	.word f_equ
+	.word f_swap
+	.word f_lit
+	.word '\r'
+	.word f_equ
+	.word f_or
+	.word f_exit
+
+	wdef isdel, "isdel", a_call, f_isnl, 0
+	.word f_dup
+	.word f_lit
+	.word '\b'
+	.word f_equ
+	.word f_swap
+	.word f_lit
+	.word 0x7F
+	.word f_equ
+	.word f_or
+	.word f_exit
+
+	wdef tib, "tib", a_doconst, f_isdel, 0
+	.word tib
+
+	wdef toin, ">in", a_doconst, f_tib, 0
+	.word toin
+
+	.equ ROM_BASE, 0x00000000
+	.equ ROM_END,  ROM_BASE + (16 * 1024)
+
+	wdef inrom, "inrom", a_call, f_toin, 0
+	.word f_2lit
+	.word ROM_BASE
+	.word ROM_END
+	.word f_within
+	.word f_exit
+
+	wdef store, "!", a_call, f_inrom, 0
+	.word f_dup
+	.word f_inrom
+	.word f_branch0
+	.word 1f
+	.word f_rom32store
+	.word f_exit
+1:
+	.word f_mem32store
+	.word f_exit
+
+	wdef mem32store, "mem32!", a_mem32store, f_store, 0
+a_mem32store:
+	call dpop
+	mv wp, tos
+	call dpop
+	sw tos, 0(wp)
+	next
+
+	wdef toinchk, ">inchk", a_toinchk, f_store, 0
+a_toinchk:
+	la wp, tib
+	la xp, tib_top
+	sub wp, xp, wp
+	la xp, toin
+	lw xp, 0(xp)
+	bltz xp, 1f
+	bge xp, wp, 1f
+	li tos, -1
+	call dpush
+	next
+1:
+	mv tos, zero
+	call dpush
+	next
+
+	wdef toinrst, ">inrst", a_call, f_toinchk, 0
+	.word f_lit
+	.word 0
+	.word f_toin
+	.word f_store
+	.word f_exit
+
+	wdef toinload, ">in@", a_call, f_toinrst, 0
+	.word f_toin
+	.word f_load
+	.word f_exit
+
+	wdef cstore, "c!", a_cstore, f_toinload, 0
+a_cstore:
+	call dpop
+	mv wp, tos
+	call dpop
+	sb tos, 0(wp)
+	next
+
+	wdef tipush, "tipush", a_call, f_cstore, 0
+	.word f_toinchk
+	.word f_branch0
+	.word 1f
+	.word f_tib
+	.word f_toinload
+	.word f_add
+	.word f_cstore
+	.word f_toinload
+	.word f_inc
+	.word f_toin
+	.word f_store
+	.word f_exit
+1:
+	.word f_drop
+	.word f_exit
+
+	wdef tidrop, "tidrop", a_call, f_tipush, 0
+	.word f_toinchk
+	.word f_branch0
+	.word 1f
+	.word f_toinload
+	.word f_branch0
+	.word 1f
+	.word f_toinload
+	.word f_dec
+	.word f_toin
+	.word f_store
+1:
+	.word f_exit
+
+	wdef cr, "cr", a_call, f_tidrop, 0
+	.word f_2lit
+	.word '\r'
+	.word '\n'
+	.word f_emit
+	.word f_emit
+	.word f_exit
+
+	wdef token, "token", a_call, f_cr, 0
+2:
+	.word f_2lit
+	.word n_key
+	.word 3
+	.word f_find
+	.word f_execute
+	.word f_dup
+	.word f_isdel
+	.word f_branch0
+	.word 1f
+	.word f_drop
+	.word f_tidrop
+	.word f_branch
+	.word 2b
+1:
+	.word f_dup
+	.word f_isnl
+	.word f_branch0
+	.word 1f
+	.word f_cr
+	.word f_drop
+	.word f_exit
+1:
+	.word f_dup
+	.word f_lit
+	.word ' '
+	.word f_equ
+	.word f_branch0
+	.word 1f
+	.word f_drop
+	.word f_exit
+1:
+	.word f_tipush
+	.word f_branch
+	.word 2b
+
+	wdef true, "true", a_doconst, f_token, 0
+	.word -1
+
+	wdef false, "false", a_doconst, f_true, 0
+	.word 0
+
+	wdef min, "min", a_min, f_false, 0
+a_min:
+	call dpop
+	mv wp, tos
+	call dpop
+	blt tos, wp, 1f
+	mv tos, wp
+	call dpush
+	next
+1:
+	call dpush
+	next
+
+	wdef tor, ">r", a_tor, f_min, 0
+a_tor:
+	call dpop
+	call rpush
+	next
+
+	wdef fromr, "r>", a_fromr, f_tor, 0
+a_fromr:
+	call rpop
+	call dpush
+	next
+
+	wdef rot, "rot", a_call, f_fromr, 0
+	.word f_tor
+	.word f_swap
+	.word f_fromr
+	.word f_swap
+	.word f_exit
+
+	wdef compare, "compare", a_call, f_rot, 0
 	.word f_rot
 	.word f_min
 	.word f_dup
 	.word f_branch0
 	.word compare_fail
-1:
+2:
 	.word f_dup
 	.word f_branch0
 	.word compare_ok
-	.word f_dec 
-	.word f_rot // a2 n a1
-	.word f_dup // a2 n a1 a1
-	.word f_cload // a2 n a1 cload(a1)
-	.word f_2swap // a1 cload(a1) a2 n
-	.word f_over  // a1 cload(a1) a2 n a2
-	.word f_cload // a1 cload(a1) a2 n cload(a2)
-	.word f_tor   // a1 cload(a1) a2 n
-	.word f_rot   // a1 a2 n cload(a1)
-	.word f_fromr // a1 a2 n cload(a1) cload(a2)
+	.word f_dec
+	.word f_rot
+	.word f_dup
+	.word f_cload
+	.word f_tor
+	.word f_rot
+	.word f_dup
+	.word f_cload
+	.word f_fromr
 	.word f_equ
 	.word f_branch0
 	.word compare_fail
-	.word f_rot // a2 n a1
 	.word f_inc
-	.word f_rot // n a1 a2
+	.word f_swap
 	.word f_inc
-	.word f_rot // a1 a2 n
+	.word f_rot
 	.word f_branch
-	.word 1b
-compare_ok:
-	.word f_drop
-	.word f_2drop
-	.word f_true
-	.word f_exit
+	.word 2b
+
 compare_fail:
-	.word f_drop
 	.word f_2drop
+	.word f_drop
 	.word f_false
 	.word f_exit
 
-	defconst latest, "latest", f_compare, attrnone
+compare_ok:
+	.word f_2drop
+	.word f_drop
+	.word f_true
+	.word f_exit
+
+	wdef latest, "latest", a_doconst, f_compare, 0
 	.word latest
 
-	defcode wlinkget, "wlink@", f_latest, attrnone
-	dpop wp
-	lw xp, -addrsize(wp)
-	li yp, addrmask
-	and xp, xp, yp
-	dpush xp
-	next
-
-	defcode wnlenget, "wnlen@", f_wlinkget, attrnone
-	dpop wp
-	lw xp, -addrsize(wp)
-	li yp, nlenmask
-	and xp, xp, yp
-	srli xp, xp, nlenshift
-	dpush xp
-	next
-
-	defcode wnameget, "wname@", f_wnlenget, attrnone
-	dpop wp
-	addi wp, wp, addrsize
-	dpush wp
-	next
-
-	defword words, "words", f_wnameget, attrnone
+	wdef latestload, "latest@", a_call, f_latest, 0
 	.word f_latest
 	.word f_load
+	.word f_exit
+
+	wdef lateststore, "latest!", a_call, f_latestload, 0
+	.word f_latest
+	.word f_store
+	.word f_exit
+
+	wdef wlinkload, "wlink@", a_wlinkload, f_lateststore, 0
+a_wlinkload:
+	call dpop
+	lw tos, -addrsize(tos)
+	li wp, link_mask
+	and tos, tos, wp
+	call dpush
+	next
+
+	wdef wnlenload, "wnlen@", a_wnlenload, f_wlinkload, 0
+a_wnlenload:
+	call dpop
+	lw tos, -addrsize(tos)
+	li wp, nlen_mask
+	and tos, tos, wp
+	srli tos, tos, nlen_shift
+	call dpush
+	next
+
+	wdef wnameload, "wname@", a_call, f_wnlenload, 0
+	.word f_cell
+	.word f_add
+	.word f_exit
+
+	wdef over, "over", a_call, f_wnameload, 0
+	.word f_tor
+	.word f_dup
+	.word f_fromr
+	.word f_swap
+	.word f_exit
+
+	wdef words, "words", a_call, f_over, 0
+	.word f_latestload
 2:
 	.word f_dup
 	.word f_branch0
 	.word 1f
 
 	.word f_dup
-	.word f_wnameget
+	.word f_wnameload
 	.word f_over
-	.word f_wnlenget
+	.word f_wnlenload
 	.word f_type
+	.word f_wlinkload
 	.word f_lit
 	.word ' '
 	.word f_emit
 
-	.word f_wlinkget
 	.word f_branch
 	.word 2b
 
@@ -1216,7 +1167,19 @@ compare_fail:
 	.word f_drop
 	.word f_exit
 
-	defword 2over, "2over", f_words, attrnone
+	wdef 2dup, "2dup", a_call, f_words, 0
+	.word f_over
+	.word f_over
+	.word f_exit
+
+	wdef 2swap, "2swap", a_call, f_2dup, 0
+	.word f_rot
+	.word f_tor
+	.word f_rot
+	.word f_fromr
+	.word f_exit
+
+	wdef 2over, "2over", a_call, f_2swap, 0
 	.word f_tor
 	.word f_tor
 	.word f_2dup
@@ -1225,65 +1188,150 @@ compare_fail:
 	.word f_2swap
 	.word f_exit
 
-	defword nip, "nip", f_2over, attrnone
+	wdef nip, "nip", a_call, f_2over, 0
 	.word f_swap
 	.word f_drop
 	.word f_exit
 
-	defword find, "find", f_nip, attrnone
-	.word f_latest
-	.word f_load
-1:
+	wdef find, "find", a_call, f_nip, 0
+	.word f_latestload
+find_loop:
 	.word f_dup
 	.word f_branch0
-	.word find_fail
+	.word find_over
 
-	.word f_dup
-	.word f_wnlenget // faddr fu link wu
-	.word f_rot      // faddr link wu fu
-	.word f_dup      // faddr link wu fu fu
-	.word f_rot      // faddr link fu fu wu
-	.word f_2swap    // faddr fu wu link fu
-	.word f_swap     // faddr fu wu fu link
-	.word f_2swap    // faddr fu link wu fu
+	.word f_2dup
+	.word f_wnlenload
 	.word f_equ
 	.word f_branch0
 	.word find_next
 
-	.word f_dup      // faddr fu link link
-	.word f_wnameget // faddr fu link waddr
-	.word f_2over    // faddr fu link waddr faddr fu
-	.word f_dup      // faddr fu link waddr faddr fu fu
-	.word f_rot      // faddr fu link waddr fu fu faddr
-	.word f_swap     // faddr fu link waddr fu faddr fu
+	.word f_dup
+	.word f_wnameload
+	.word f_2over
+	.word f_dup
+	.word f_rot
+	.word f_swap
 	.word f_compare
 	.word f_branch0
 	.word find_next
 
+find_over:
 	.word f_nip
 	.word f_nip
 	.word f_exit
 
 find_next:
-	.word f_wlinkget
+	.word f_wlinkload
 	.word f_branch
-	.word 1b
+	.word find_loop
 
-find_fail:
-	.word f_drop
-	.word f_2drop
-	.word f_false
+	wdef execute, "execute", a_execute, f_find, 0
+a_execute:
+	call dpop
+	mv wp, tos
+	lw xp, 0(wp)
+	jr xp
+
+	wdef ssget, "ss@", a_ssget, f_execute, 0
+a_ssget:
+	mv tos, ss
+	call dpush
+	next
+
+	wdef ssset, "ss!", a_ssset, f_ssget, 0
+a_ssset:
+	call dpop
+	mv ss, tos
+	next
+
+	wdef ssrst, "ssrst", a_call, f_ssset, 0
+	.word f_lit
+	.word 0
+	.word f_ssset
 	.word f_exit
 
-	defcode execute, "execute", f_find, attrnone
-	dpop wp
-        li yp, addrmask
-        and wp, wp, yp
-        lw xp, 0(wp)
-        and xp, xp, yp
-        jr xp
+	wdef ssdund, "ssdund", a_doconst, f_ssrst, 0
+	.word ssdund
 
-	defword isxdigit, "isxdigit", f_execute, attrnone
+	wdef xor, "xor", a_xor, f_ssdund, 0
+a_xor:
+	call dpop
+	mv wp, tos
+	call dpop
+	xor tos, tos, wp
+	call dpush
+	next
+
+	wdef invert, "invert", a_call, f_xor, 0
+	.word f_lit
+	.word -1
+	.word f_xor
+	.word f_exit
+
+	wdef neq, "<>", a_call, f_invert, 0
+	.word f_equ
+	.word f_invert
+	.word f_exit
+
+	wdef eqz, "0=", a_call, f_neq, 0
+	.word f_lit
+	.word 0
+	.word f_equ
+	.word f_exit
+
+	wdef ssdchk, "ssdchk", a_call, f_eqz, 0
+	.word f_ssget
+	.word f_ssdund
+	.word f_and
+	.word f_eqz
+	.word f_exit
+
+	wdef sprst, "sprst", a_sprst, f_ssdchk, 0
+a_sprst:
+	mv sp, st
+	next
+
+	wdef lt, "<", a_lt, f_sprst, 0
+a_lt:
+	call dpop
+	mv wp, tos
+	call dpop
+	blt tos, wp, 1f
+	mv tos, zero
+	call dpush
+	next
+1:
+	li tos, -1
+	call dpush
+	next
+
+	wdef gt, ">", a_call, f_lt, 0
+	.word f_swap
+	.word f_lt
+	.word f_exit
+
+	wdef ge, ">=", a_call, f_gt, 0
+	.word f_lt
+	.word f_invert
+	.word f_exit
+
+	wdef le, "<=", a_call, f_ge, 0
+	.word f_gt
+	.word f_invert
+	.word f_exit
+
+	wdef within, "within", a_call, f_le, 0
+	.word f_tor
+	.word f_over
+	.word f_le
+	.word f_swap
+	.word f_fromr
+	.word f_lt
+	.word f_and
+	.word f_exit
+
+	wdef isxdigit, "isxdigit", a_call, f_within, 0
 	.word f_dup
 	.word f_2lit
 	.word '0'
@@ -1297,11 +1345,30 @@ find_fail:
 	.word f_or
 	.word f_exit
 
-	// (addr u) -- (bool)
-	defword isnumber, "isnumber", f_isxdigit, attrnone
+	// (addr u)
+	wdef isnumber, "isnumber", a_call, f_isxdigit, 0
 	.word f_dup
+	.word f_lit
+	.word 2
+	.word f_gt
 	.word f_branch0
 	.word isnumber_false
+
+	// check header "0x"
+	.word f_2dup
+	.word f_2lit
+	.word isnumber_hdr
+	.word 2
+	.word f_compare
+	.word f_branch0
+	.word isnumber_false
+	.word f_dec
+	.word f_dec
+	.word f_swap
+	.word f_inc
+	.word f_inc
+	.word f_swap
+
 1:
 	.word f_dup
 	.word f_branch0
@@ -1318,30 +1385,36 @@ find_fail:
 	.word f_branch
 	.word 1b
 
-isnumber_false:
-	.word f_2drop
-	.word f_false
-	.word f_exit
-
 isnumber_true:
 	.word f_2drop
 	.word f_true
 	.word f_exit
 
-	defcode lshift, "lshift", f_isnumber, attrnone
-	dpop wp
-	dpop xp
-	sll xp, xp, wp
-	dpush xp
+isnumber_false:
+	.word f_2drop
+	.word f_false
+	.word f_exit
+
+isnumber_hdr:
+	.ascii "0x"
+	.p2align 2, 0xFF
+
+	wdef lshift, "lshift", a_lshift, f_isnumber, 0
+a_lshift:
+	call dpop
+	mv wp, tos
+	call dpop
+	sll tos, tos, wp
+	call dpush
 	next
 
-	defcode 4mul, "4*", f_lshift, attrnone
-	dpop wp
-	slli wp, wp, 2
-	dpush wp
-	next
+	wdef 4mul, "4*", a_call, f_lshift, 0
+	.word f_lit
+	.word 2
+	.word f_lshift
+	.word f_exit
 
-	defword hex2num "hex2num", f_4mul, attrnone
+	wdef hex2num, "hex2num", a_call, f_4mul, 0
 	.word f_dup
 	.word f_lit
 	.word '9'
@@ -1361,639 +1434,366 @@ hex2num_x:
 	.word 0xA
 	.word f_add
 	.word f_exit
+	
 
-	// (addr u) -- (number)
-	defword number, "number", f_hex2num, attrnone
-	.word f_dup
+	// addr u
+	wdef number, "number", a_call, f_hex2num, 0
+	.word f_2dup
+	.word f_isnumber
 	.word f_branch0
-	.word number_zero
+	.word number_nonum
 
-	.word f_lit
-	.word 0
-	.word f_over
+	.word f_dec
+	.word f_dec
+	.word f_swap
+	.word f_inc
+	.word f_inc
+	.word f_swap
+
+
+	.word f_dup
 	.word f_dec
 	.word f_4mul
-	// addr u out shi
-
+	.word f_lit
+	.word 0
+	// addr u shi out
 1:
 	.word f_2swap
-	// out shi addr u
 	.word f_dup
 	.word f_branch0
-	.word number_end
-	.word f_over  // out shi addr u addr
-	.word f_cload // out shi addr u cload(addr)
-	.word f_hex2num // out shi addr u hexnum
-	.word f_tor     // out shi addr u
-	.word f_dec
-	.word f_swap    // out shi u addr
-	.word f_inc
-	.word f_swap    // out shi addr u
+	.word number_over
 
-	.word f_2swap  // addr u out shi
-	.word f_fromr  // addr u out shi hexnum
-	.word f_over   // addr u out shi hexnum shi
-	.word f_lshift // addr u out shi hexnum<<shi
-	.word f_rot    // addr u shi hexnum<<shi out
-	.word f_or     // addr u shi out
-	.word f_swap   // addr u out shi
+	.word f_dec
+	.word f_swap
+	.word f_dup
+	.word f_cload
+	.word f_hex2num
+	.word f_tor
+	.word f_inc
+	.word f_swap
+
+	.word f_2swap
+	.word f_over
+	.word f_fromr
+	.word f_swap
+	.word f_lshift
+	.word f_or
+
+	.word f_swap
 	.word f_lit
 	.word 4
 	.word f_sub
+	.word f_swap
+
 	.word f_branch
 	.word 1b
 
-number_end:
-	.word f_drop
+number_over:
 	.word f_2drop
-	.word f_exit
-
-number_zero:
 	.word f_nip
 	.word f_exit
 
-	defcode ssget, "ss@", f_number, attrnone
-	dpush ss
-	next
+number_nonum:
+	.word f_2drop
+	.word f_lit
+	.word 0
+	.word f_exit
 
-	defcode ssset, "ss!", f_ssget, attrnone
-	dpop ss
-	next
-
-	defconst sscomp, "sscomp", f_ssset, attrnone
+	wdef sscomp, "sscomp", a_doconst, f_number, 0
 	.word sscomp
 
-	defcode bic, "bic", f_sscomp, attrnone
-	dpop wp
-	dpop xp
-	xori wp, wp, -1
-	and wp, wp, xp
-	dpush wp
-	next
+	wdef bic, "bic", a_call, f_sscomp, 0
+	.word f_invert
+	.word f_and
+	.word f_exit
 
-	defword compoff, "[", f_bic, attrimmd
+	wdef compon, "]", a_call, f_bic, 0
+	.word f_ssget
+	.word f_sscomp
+	.word f_or
+	.word f_ssset
+	.word f_exit
+
+	wdef compoff, "[", a_call, f_compon, attr_immed
 	.word f_ssget
 	.word f_sscomp
 	.word f_bic
 	.word f_ssset
 	.word f_exit
 
-	defword compon, "]", f_compoff, attrnone
-	.word f_ssget
-	.word f_sscomp
-	.word f_or
-	.word f_ssset
+	wdef nez, "0<>", a_call, f_compoff, 0
+	.word f_lit
+	.word 0
+	.word f_neq
 	.word f_exit
 
-	defword incomp, "incomp", f_compon, attrnone
+	wdef compstat, "compstat", a_call, f_compoff, 0
 	.word f_ssget
 	.word f_sscomp
 	.word f_and
-	.word f_sscomp
-	.word f_equ
+	.word f_nez
 	.word f_exit
 
-	defconst ramhere, "ramhere", f_incomp, attrnone
-	.word ramhere
-
-	defword ramnext, "ramnext", f_ramhere, attrnone
-	.word f_cell
-	.word f_ramhere
-	.word f_load
-	.word f_add
-	.word f_ramhere
-	.word f_store
-	.word f_exit
-
-	defword rampush, "ram,", f_ramhere, attrnone
-	.word f_ramhere
-	.word f_load
-	.word f_store
-	.word f_ramnext
-	.word f_exit
-
-	defcode wisimmd, "wisimmd", f_rampush, attrnone
-	dpop wp
-	lw xp, -addrsize(wp)
-	andi xp, xp, attrimmd
+	wdef wisimmd, "wisimmd", a_wisimmd, f_compstat, 0
+a_wisimmd:
+	call dpop
+	lw xp, -addrsize(tos)
+	andi xp, xp, attr_immed
 	bnez xp, 1f
-	dpush zero
+	mv tos, zero
+	call dpush
 	next
 1:
-	li xp, -1
-	dpush xp
+	li tos, -1
+	call dpush
 	next
 
-	defword here, "here", f_wisimmd, attrnone
-	.word f_ramhere
+	wdef here, "here", a_doconst, f_wisimmd, 0
+	.word here
+
+	wdef hereload, "here@", a_call, f_here, 0
+	.word f_here
+	.word f_load
 	.word f_exit
 
-	defword herenext, "herenext", f_here, attrnone
-	.word f_ramnext
+	wdef herestore, "here!", a_call, f_hereload, 0
+	.word f_here
+	.word f_store
 	.word f_exit
 
-	defword herepush, ",", f_herenext, attrnone
-	.word f_rampush
+	wdef comma, ",", a_call, f_herestore, 0
+	.word f_hereload
+	.word f_store
+
+	.word f_hereload
+	.word f_cell
+	.word f_add
+	.word f_herestore
 	.word f_exit
 
-	defcode aligned, "aligned", f_herepush, attrnone
-	dpop wp
-	addi wp, wp, -1
-	addi wp, wp, addrsize
-	andi wp, wp, -addrsize
-	dpush wp
-	next
+	wdef nlenshift, "nlenshift", a_doconst, f_comma, 0
+	.word nlen_shift
 
-	defcode wentrget, "wentr@", f_aligned, attrnone
-	dpop wp
-	lw xp, 0(wp)
-	li yp, addrmask
-	and xp, xp, yp
-	dpush xp
-	next
-
-	defword cmove, "cmove", f_wentrget, attrnone
-1:
+	wdef cmove, "cmove", a_call, f_nlenshift, 0
+2:
 	.word f_dup
 	.word f_branch0
-	.word cmove_end
+	.word 1f
 	.word f_dec
-	.word f_tor    // saddr daddr
-	.word f_over   // saddr daddr saddr
-	.word f_cload  // saddr daddr cload(saddr)
-	.word f_over   // saddr daddr cload(saddr) daddr
-	.word f_cstore // saddr daddr
+	.word f_tor
+	.word f_over
+	.word f_cload
+	.word f_over
+	.word f_cstore
 	.word f_inc
 	.word f_swap
 	.word f_inc
 	.word f_swap
 	.word f_fromr
 	.word f_branch
-	.word 1b
-
-cmove_end:
+	.word 2b
+1:
 	.word f_drop
 	.word f_2drop
 	.word f_exit
 
-	defconst nlenshift, "nlenshift", f_cmove, attrnone
-	.word nlenshift
+	wdef aligned, "aligned", a_aligned, f_cmove, 0
+a_aligned:
+	call dpop
+	addi tos, tos, ((-1) + addrsize)
+	andi tos, tos, -addrsize
+	call dpush
+	next
 
-	defconst offtshift, "offtshift", f_nlenshift, attrnone
-	.word offtshift
+	wdef align, "align", a_call, f_aligned, 0
+	.word f_hereload
+	.word f_aligned
+	.word f_herestore
+	.word f_exit
 
-	// (addr u) -- ()
-	defword defword, "defword", f_offtshift, attrnone
-	// set link
+	wdef wentrload, "wentr@", a_call, f_align, 0
+	.word f_load
+	.word f_exit
+
+	// (addr u)
+	wdef defword, "defword", a_call, f_wentrload, 0
+	.word f_align
+
+	// set link & nlen
 	.word f_dup
 	.word f_nlenshift
 	.word f_lshift
-	.word f_latest
-	.word f_load
+	.word f_latestload
 	.word f_or
-	.word f_herepush
+	.word f_comma
 
-	// set latest
-	.word f_here
-	.word f_load
-	.word f_latest
-	.word f_store
+	.word f_hereload
+	.word f_lateststore
 
-	// set entr
-	.word f_dup
-	.word f_aligned
-	.word f_cell
-	.word f_add
-	.word f_offtshift
-	.word f_lshift
+	// set entry
 	.word f_2lit
-	.word _str_call
+	.word n_call
 	.word 4
 	.word f_find
-	.word f_wentrget
-	.word f_or
-	.word f_herepush
+	.word f_wentrload
+	.word f_comma
 
-	// set name
-	.word f_here
-	.word f_load
-	.word f_swap
 	.word f_dup
 	.word f_tor
+
+	// copy name
+	.word f_hereload
+	.word f_swap
 	.word f_cmove
 
 	.word f_fromr
-	.word f_aligned
-	.word f_here
-	.word f_load
+	.word f_hereload
 	.word f_add
-	.word f_here
-	.word f_store
+	.word f_herestore
 
+	.word f_align
 	.word f_exit
-_str_call:
-	.ascii "call"
-	.p2align 2, 0
 
-	defword docom, ":", f_defword, attrnone
+	wdef docom, ":", a_call, f_defword, 0
 1:
-        .word f_toinrst
-        .word f_token
-        .word f_toin
-        .word f_load
-        .word f_branch0
-        .word 1b
+	.word f_toinrst
+	.word f_token
+	.word f_toinload
+	.word f_branch0
+	.word 1b
 
 	.word f_tib
-	.word f_toin
-	.word f_load
+	.word f_toinload
 	.word f_defword
 	.word f_compon
 	.word f_exit
 
-	defword doend, ";", f_docom, attrimmd
+	wdef doend, ";", a_call, f_docom, attr_immed
 	.word f_2lit
-	.word _str_exit
+	.word n_exit
 	.word 4
 	.word f_find
-	.word f_herepush
+	.word f_comma
 	.word f_compoff
 	.word f_exit
 
-_str_exit:
-	.ascii "exit"
-	.p2align 2, 0
-
-	defconst ssdund, "ssdund", f_doend, attrnone
-	.word ssdund
-
-	defcode sprst, "sprst", f_ssdund, attrnone
-	addi sp, st, 0
-	next
-
-	defword ifnz, "if", f_sprst, attrimmd
+	wdef ifnz, "if", a_call, f_doend, attr_immed
 	.word f_2lit
-	.word _str_branch0
+	.word n_branch0
 	.word 7
 	.word f_find
-	.word f_herepush
-	.word f_here
-	.word f_load
-	.word f_dup // save address, used for 'then'
-	.word f_cell
-	.word f_add
-	.word f_here
-	.word f_store
+	.word f_comma
+	.word f_hereload
+	.word f_lit
+	.word -1
+	.word f_comma
 	.word f_exit
 
-_str_branch0:
-	.ascii "branch0"
-	.p2align 2, 0
-
-	defword then, "then", f_ifnz, attrimmd
-	.word f_here
-	.word f_load
+	wdef then, "then", a_call, f_ifnz, attr_immed
+	.word f_hereload
 	.word f_swap
 	.word f_store
 	.word f_exit
 
-	defword begin, "begin", f_then, attrimmd
-	.word f_here
-	.word f_load // save address, used for until
+	wdef begin, "begin", a_call, f_then, attr_immed
+	.word f_hereload
 	.word f_exit
 
-	defword until, "until", f_begin, attrimmd
+	wdef until, "until", a_call, f_begin, attr_immed
 	.word f_2lit
-	.word _str_branch0
+	.word n_branch0
 	.word 7
 	.word f_find
-	.word f_herepush
-	.word f_herepush
+	.word f_comma
+	.word f_comma
 	.word f_exit
 
-	defword dot, ".", f_until, attrnone
-	.word f_hex32
+	wdef tick, "'", a_call, f_until, 0
+1:
+	.word f_toinrst
+	.word f_token
+	.word f_toinload
+	.word f_branch0
+	.word 1b
+
+	.word f_tib
+	.word f_toinload
+	.word f_find
 	.word f_exit
 
-	defcode dogon, "dogon", f_dot, attrnone
+	wdef dogon, "dogon", a_dogon, f_tick, 0
+a_dogon:
 	li wp, IWDG_BASE
 	li xp, IWDG_KEYON
 	sh xp, IWDG_CTLR_R16(wp)
 	next
 
-	defcode feedog, "feedog", f_dogon, attrnone
+	wdef feedog, "feedog", a_feedog, f_dogon, 0
+a_feedog:
 	li wp, IWDG_BASE
 	li xp, IWDG_KEYFEED
 	sh xp, IWDG_CTLR_R16(wp)
 	next
 
-	defconst yieldcount, "yieldcount", f_feedog, attrnone
-	.word yield_count
-
-	defcode systickon, "systickon", f_yieldcount, attrnone
-        li wp, STK_BASE
-        li xp, 1000 // 1ms
-        sw xp, STK_CMPLR(wp)
-        sw zero, STK_CNTL(wp)
-        li xp, STK_STRE | STK_HCLKDIV8 | STK_STIE | STK_STEN
-        sw xp, STK_CTLR(wp)
+	wdef systickon, "systickon", a_systickon, f_feedog, 0
+a_systickon:
+	li wp, STK_BASE
+	li xp, 6000 // 1ms
+	sw xp, STK_CMPLR(wp)
+	sw zero, STK_CNTL(wp)
+	li xp, STK_STRE | STK_HCLKDIV8 | STK_STIE | STK_STEN
+	sw xp, STK_CTLR(wp)
 	next
 
-	defcode systickoff, "systickoff", f_systickon, attrnone
+	wdef systickoff, "systickoff", a_systickoff, f_systickon, 0
+a_systickoff:
 	li wp, STK_BASE
 	sw zero, STK_CTLR(wp)
 	next
 
-	defconst systickcount, "systickcount", f_systickoff, attrnone
-	.word systick_count
+	wdef mscountl, "mscountl", a_doconst, f_systickoff, 0
+	.word mscountl
 
-	defconst systickcounthigh, "systickcounthigh", f_systickcount, attrnone
-	.word systick_count + addrsize
+	wdef mscounth, "mscounth", a_doconst, f_mscountl, 0
+	.word mscounth
 
-	defword millis, "millis", f_systickcounthigh, attrnone
-	.word f_systickcount
-	.word f_load
+	wdef irqcount, "irqcount", a_doconst, f_mscounth, 0
+	.word irqcount
+
+	wdef motd, "motd", a_call, f_irqcount, 0
+	.word f_2lit
+	.word _msg_motd
+	.word _msg_end_motd - _msg_motd
+	.word f_type
 	.word f_exit
 
-	defword quest, "?", f_millis, attrnone
+_msg_motd:
+	.ascii "\n\r"
+	.ascii " _____ _____ _____ _____ _____\n\r"
+	.ascii "|   __|     | __  |_   _|  |  |\n\r"
+	.ascii "|   __|  |  |    -| | | |     |\n\r"
+	.ascii "|__|  |_____|__|__| |_| |__|__|\n\r"
+	.ascii "\n\r"
+	.ascii "ITC FORTH on CH32V003 (rv32ec)\n\r"
+	.ascii "\n\r"
+_msg_end_motd:
+	.p2align 2, 0xFF
+
+	wdef dot, ".", a_call, f_motd, 0
+	.word f_hex32
+	.word f_exit
+
+	wdef quest, "?", a_call, f_dot, 0
 	.word f_load
 	.word f_dot
 	.word f_exit
 
-	defcode neq, "<>", f_quest, attrnone
-	dpop wp
-	dpop xp
-	bne wp, xp, 1f
-	dpush zero
-	next
-1:
-	li xp, -1
-	dpush xp
-	next
+	wdef ycount, "ycount", a_doconst, f_quest, 0
+	.word ycount
 
-	defword delay1ms, "delay1ms", f_neq, attrnone
-	.word f_millis
-1:
-	.word f_yield
-	.word f_dup
-	.word f_millis
-	.word f_neq
-	.word f_branch0
-	.word 1b
-	.word f_drop
-	.word f_exit
-
-	defword delayms, "delayms", f_delay1ms, attrnone
-2:
-	.word f_dup
-	.word f_branch0
-	.word 1f
-	.word f_delay1ms
-	.word f_dec
-	.word f_branch
-	.word 2b
-1:
-	.word f_drop
-	.word f_exit
-
-	defword motd, "motd", f_delayms, attrnone
-	.word f_2lit
-	.word _str_motd
-	.word _str_motd_end - _str_motd
-	.word f_type
-	.word f_2lit
-	.word _str_flash_info
-	.word _str_flash_info_end - _str_flash_info
-	.word f_type
-	.word f_romsize
-	.word f_hex16
-	.word f_newline
-	.word f_2lit
-	.word _str_uid
-	.word _str_uid_end - _str_uid
-	.word f_type
-	.word f_uid1
-	.word f_hex32
-	.word f_uid2
-	.word f_hex32
-	.word f_uid3
-	.word f_hex32
-	.word f_newline
-	.word f_exit
-
-_str_motd:
-	.ascii "FORTH on CH32V003\n\r"
-_str_motd_end:
-_str_flash_info:
-	.ascii "FLASH SIZE: 0x"
-_str_flash_info_end:
-_str_uid:
-	.ascii "CHIP UID: "
-_str_uid_end:
-	.p2align 2, 0
-
-	defword tick, "'", f_motd, attrnone
-1:
-        .word f_toinrst
-        .word f_token
-        .word f_toin
-        .word f_load
-        .word f_branch0
-        .word 1b
-
-	.word f_tib
-	.word f_toin
-	.word f_load
-	.word f_find
-	.word f_exit
-
-	defword allot, "allot", f_tick, attrnone
-1:
-	.word f_dup
-	.word f_branch0
-	.word 2f
-	.word f_dec
-	.word f_herenext
-	.word f_branch
-	.word 1b
-2:
-	.word f_drop
-	.word f_exit
-
-	defconst tasksize, "tasksize", f_allot, attrnone
-	.word tasksize
-
-	defconst dstksize, "dstksize", f_tasksize, attrnone
-	.word dstksize
-
-	defconst rstksize, "rstksize", f_dstksize, attrnone
-	.word rstksize
-
-	defconst gapsize, "gapsize", f_rstksize, attrnone
-	.word gapsize
-
-	defconst tonext, "tonext", f_gapsize, attrnone
-	.word tonext
-
-	defword tnextget, "tnext@", f_tonext, attrnone
-	.word f_tonext
-	.word f_add
-	.word f_load
-	.word f_exit
-
-        defword tnextset, "tnext!", f_tnextget, attrnone
-        .word f_tonext
-        .word f_add
-        .word f_store
-        .word f_exit
-
-        defconst torp, "torp", f_tnextset, attrnone
-        .word torp
-
-        defword trpget, "trp@", f_torp, attrnone
-        .word f_torp
-        .word f_add
-        .word f_load
-        .word f_exit
-
-        defword trpset, "trp!", f_trpget, attrnone
-        .word f_torp
-        .word f_add
-        .word f_store
-        .word f_exit
-
-        defconst tosp, "tosp", f_trpset, attrnone
-        .word tosp
-
-        defword tspget, "tsp@", f_tosp, attrnone
-        .word f_tosp
-        .word f_add
-        .word f_load
-        .word f_exit
-
-        defword tspset, "tsp!", f_tspget, attrnone
-        .word f_tosp
-        .word f_add
-        .word f_store
-        .word f_exit
-
-        defconst toip, "toip", f_tspset, attrnone
-        .word toip
-
-        defword tipget, "tip@", f_toip, attrnone
-        .word f_toip
-        .word f_add
-        .word f_load
-        .word f_exit
-
-        defword tipset, "tip!", f_tipget, attrnone
-        .word f_toip
-        .word f_add
-        .word f_store
-        .word f_exit
-
-	defconst toss, "toss", f_tipset, attrnone
-        .word toss
-
-        defword tssget, "tss@", f_toss, attrnone
-        .word f_toss
-        .word f_add
-        .word f_load
-        .word f_exit
-
-        defword tssset, "tss!", f_tssget, attrnone
-        .word f_toss
-        .word f_add
-        .word f_store
-        .word f_exit
-
-	defconst tost, "tost", f_tssset, attrnone
-        .word tost
-
-        defword tstget, "tst@", f_tost, attrnone
-        .word f_tost
-        .word f_add
-        .word f_load
-        .word f_exit
-
-        defword tstset, "tst!", f_tstget, attrnone
-        .word f_tost
-        .word f_add
-        .word f_store
-        .word f_exit
-
-	defcode upget, "up@", f_tstset, attrnone
-	dpush up
-	next
-
-	// (entry)
-	defword tasknew, "tasknew", f_upget, attrnone
-	.word f_here
-	.word f_load // entry taskaddr
-	.word f_tasksize
-	.word f_allot
-	.word f_swap // taskaddr entry
-	.word f_over // taskaddr entry taskaddr
-	.word f_tipset // taskaddr
-
-	.word f_rstksize
-	.word f_allot
-	.word f_here
-	.word f_load // taskaddr rstktop
-	.word f_over // taskaddr rstktop taskaddr
-	.word f_trpset // taskaddr
-	.word f_lit
-	.word 1
-	.word f_allot
-
-	.word f_dstksize
-	.word f_allot
-	.word f_here
-	.word f_load // taskaddr dstktop
-	.word f_over // taskaddr dstktop taskaddr
-	.word f_2dup // taskaddr dstktop taskaddr dstktop taskaddr
-	.word f_tspset 
-	.word f_tstset
-	.word f_lit
-	.word 1
-	.word f_allot
-
-	.word f_lit
-	.word 0
-	.word f_over  // taskaddr 0 taskaddr
-	.word f_tssset
-
-	.word f_upget
-	.word f_tnextget // taskaddr upnext
-	.word f_over     // taskaddr upnext taskaddr
-	.word f_tnextset // taskaddr
-
-	.word f_upget
-	.word f_tnextset
-
-	.word f_exit
-
-	defcode wbodyget, "wbody@",  f_tasknew, attrnone
-	dpop wp
-	lw xp, 0(wp)
-	li yp, offtmask
-	and xp, xp, yp
-	srli xp, xp, offtshift
-	add xp, xp, wp
-	dpush xp
-	next
-
-	defword dotask, "task;", f_wbodyget, attrimmd
-	.word f_doend
-	.word f_latest
-	.word f_load
-	.word f_wbodyget
-	.word f_tasknew
-	.word f_exit
-
-	defcode reboot, "reboot", f_dotask, attrnone
-sysrst:
-        .equ PFIC_CFGR, 0x48
+	wdef sysrst, "sysrst", a_sysrst, f_ycount, 0
+a_sysrst:
+	.equ PFIC_CFGR, 0x48
         .equ PFIC_KEY3, (0xBEEF << 16)
         .equ SYSRESET, (1 << 7)
         li wp, PFIC_BASE
@@ -2002,94 +1802,36 @@ sysrst:
 1:
         j 1b
 
-	defcode uid1, "uid1", f_reboot, attrnone
-	.equ ESIG_BASE, 0x1FFFF700
-	.equ ESIG_UNIID1, 0xE8
+	wdef chipuid, "chipuid", a_chipuid, f_sysrst, 0
+a_chipuid:
 	li wp, ESIG_BASE
-	lw xp, ESIG_UNIID1(wp)
-	dpush xp
+	lw tos, ESIG_UNIID3(wp)
+	call dpush
+	lw tos, ESIG_UNIID2(wp)
+	call dpush
+	lw tos, ESIG_UNIID1(wp)
+	call dpush
 	next
 
-	defcode uid2, "uid2", f_uid1, attrnone
-	.equ ESIG_UNIID2, 0xEC
-	li wp, ESIG_BASE
-	lw xp, ESIG_UNIID2(wp)
-	dpush xp
-	next
-
-	defcode uid3, "uid3", f_uid2, attrnone
-	.equ ESIG_UNIID3, 0xF0
-	li wp, ESIG_BASE
-	lw xp, ESIG_UNIID3(wp)
-	dpush xp
-	next
-
-	defcode romsize, "romsize", f_uid3, attrnone
-	.equ ESIG_FLACAP, 0xE0
-	li wp, ESIG_BASE
-	lhu xp, ESIG_FLACAP(wp)
-	dpush xp
-	next
-
-	// TODO, impl div
-	defword sysclk, "sysclk", f_romsize, attrnone
-	.word f_lit
-	.word 24
-	.word f_exit
-
-	defword hclk, "hclk", f_sysclk, attrnone
-	.word f_lit
-	.word 8
-	.word f_exit
-
-	defcode baudset, "baudset", f_hclk, attrnone
-	li wp, UART1_BASE
-	dpop xp
-	li yp, 9600
-	beq xp, yp, baud9600
-	li yp, 115200
-	beq xp, yp, baud115200
-	next
-
-baud9600:
-	li xp, BAUD_9600
-	sw xp, UART_BRR(wp)
-	next
-
-baud115200:
-	li xp, BAUD_115200
-	sw xp, UART_BRR(wp)
-	next
-
-	defcode paoutget, "paout@", f_hclk, attrnone
-	li wp, GPIOA_BASE
-	lw xp, GPIO_OUTDR(wp)
-	dpush xp
-	next
-
-	defcode paoutset, "paout!", f_paoutget, attrnone
-	li wp, GPIOA_BASE
-	dpop xp
-	sw xp, GPIO_OUTDR(wp)
-	next
-
-	defcode romunlock, "romunlock", f_paoutset, attrnone
+	wdef romunlock, "romunlock", a_romunlock, f_chipuid, 0
+a_romunlock:
 	.equ FLASH_BASE, 0x40022000
-	.equ FLASH_ACTLR,  0x00
-	.equ FLASH_KEYR,   0x04
-	.equ FLASH_OBKEYR, 0x08
-	.equ FLASH_STATR,  0x0C
-	.equ FLASH_CTLR,   0x10
-	.equ FLASH_KEY1,   0x45670123
-	.equ FLASH_KEY2,   0xCDEF89AB
-	li wp, FLASH_BASE
-	li xp, FLASH_KEY1
-	sw xp, FLASH_KEYR(wp)
-	li xp, FLASH_KEY2
-	sw xp, FLASH_KEYR(wp)
-	next
+        .equ FLASH_ACTLR,  0x00
+        .equ FLASH_KEYR,   0x04
+        .equ FLASH_OBKEYR, 0x08
+        .equ FLASH_STATR,  0x0C
+        .equ FLASH_CTLR,   0x10
+        .equ FLASH_KEY1,   0x45670123
+        .equ FLASH_KEY2,   0xCDEF89AB
+        li wp, FLASH_BASE
+        li xp, FLASH_KEY1
+        sw xp, FLASH_KEYR(wp)
+        li xp, FLASH_KEY2
+        sw xp, FLASH_KEYR(wp)
+        next
 
-	defcode romlock, "romlock", f_romunlock, attrnone
+	wdef romlock, "romlock", a_romlock, f_romunlock, 0
+a_romlock:
 	.equ FLASH_LOCK, (1 << 7)
 	li wp, FLASH_BASE
 	lw xp, FLASH_CTLR(wp)
@@ -2097,46 +1839,90 @@ baud115200:
 	sw xp, FLASH_CTLR(wp)
 	next
 
-	defcode rom16store, "rom16!", f_romlock, attrnone
-	dpop wp // addr
-	dpop xp // value
-	li yp, 0xFFFF
-	and xp, xp, yp
-rom16w_loop:
-	lhu yp, 0(wp)
-	beq xp, yp, rom16w_done
-	dpush xp
-start_rom_write:
-	.equ FLASH_PG, (1 << 0)
-	la yp, FLASH_BASE
-	lw xp, FLASH_CTLR(yp)
-	ori xp, xp, FLASH_PG
-	sw xp, FLASH_CTLR(yp)
-	dpop xp
-	.equ CODE_FLASH_BASE, 0x08000000
-	li yp, CODE_FLASH_BASE
-	dpush wp
-	or wp, wp, yp
-	sh xp, 0(wp)
-	dpop wp
-wait_rom_write:
-	dpush xp
+	wdef FLASH_BASE, "FLASH_BASE", a_doconst, f_romlock, 0
+	.word FLASH_BASE
+
+	wdef FLASH_STATR, "FLASH_STATR", a_doconst, f_FLASH_BASE, 0
+	.word FLASH_STATR
+
 	.equ FLASH_BUSY, (1 << 0)
-	la yp, FLASH_BASE
-1:
-	lw xp, FLASH_STATR(yp)
-	andi xp, xp, FLASH_BUSY
-	bnez xp, 1b
-end_rom_write:
-	lw xp, FLASH_CTLR(yp)
-	xori xp, xp, FLASH_PG
-	sw xp, FLASH_CTLR(yp)
-	dpop xp
-	j rom16w_loop
-rom16w_done:
+	wdef FLASH_BUSY, "FLASH_BUSY", a_doconst, f_FLASH_STATR, 0
+	.word FLASH_BUSY
+
+	wdef rombusy, "rombusy", a_call, f_FLASH_BUSY, 0
+	.word f_FLASH_BASE
+	.word f_FLASH_STATR
+	.word f_add
+	.word f_load
+	.word f_FLASH_BUSY
+	.word f_and
+	.word f_nez
+	.word f_exit
+
+	wdef FLASH_CTLR, "FLASH_CTLR", a_doconst, f_rombusy, 0
+	.word FLASH_CTLR
+
+	.equ FLASH_PG, (1 << 0)
+	wdef FLASH_PG, "FLASH_PG", a_doconst, f_FLASH_CTLR, 0
+	.word FLASH_PG
+
+
+	wdef romctlrload, "romctlr@", a_call, f_FLASH_PG, 0
+	.word f_FLASH_BASE
+	.word f_FLASH_CTLR
+	.word f_add
+	.word f_load
+	.word f_exit
+
+	wdef romctlrstore, "romctlr!", a_call, f_romctlrload, 0
+	.word f_FLASH_BASE
+	.word f_FLASH_CTLR
+	.word f_add
+	.word f_store
+	.word f_exit
+
+	wdef rompgon, "rompgon", a_call, f_romctlrstore, 0
+	.word f_romctlrload
+	.word f_FLASH_PG
+	.word f_or
+	.word f_romctlrstore
+	.word f_exit
+
+	wdef rompgoff, "rompgoff", a_call, f_rompgon, 0
+	.word f_romctlrload
+	.word f_FLASH_PG
+	.word f_bic
+	.word f_romctlrstore
+	.word f_exit
+
+	wdef 16store, "16!", a_16store, f_rompgoff, 0
+a_16store:
+	call dpop
+	mv wp, tos
+	call dpop
+	sh tos, 0(wp)
 	next
 
-	defword rom32store, "rom32!", f_rom16store, attrnone
+	wdef romwait, "romwait", a_call, f_16store, 0
+1:
+	.word f_yield
+	.word f_rombusy
+	.word f_invert
+	.word f_branch0
+	.word 1b
+	.word f_exit
+
+	.equ CODE_FLASH_BASE, 0x08000000
+	wdef rom16store, "rom16!", a_call, f_romwait, 0
+	.word f_romwait
+	.word f_lit
+	.word CODE_FLASH_BASE
+	.word f_or
+	.word f_16store
+	.word f_romwait
+	.word f_exit
+
+	wdef rom32store, "rom32!", a_call, f_rom16store, 0
 	.word f_2dup
 	.word f_swap
 	.word f_lit
@@ -2150,1739 +1936,1867 @@ rom16w_done:
 	.word f_rom16store
 	.word f_exit
 
-	defword interpret, "interpret", f_rom32store, attrnone
-interpret_start:
-	.word f_toinrst
-	.word f_token
-	.word f_toin
-	.word f_load
-	.word f_branch0
-	.word interpret_start
+	.equ FLASH_ADDR, 0x14
+	wdef FLASH_ADDR, "FLASH_ADDR", a_doconst, f_rom32store, 0
+	.word FLASH_ADDR
 
+	.equ FLASH_PER, (1 << 1)
+	wdef FLASH_PER, "FLASH_PER", a_doconst, f_FLASH_ADDR, 0
+	.word FLASH_PER
+
+	.equ FLASH_STRT, (1 << 6)
+	wdef FLASH_STRT, "FLASH_STRT", a_doconst, f_FLASH_PER, 0
+	.word FLASH_STRT
+
+	wdef rom1kerase, "rom1kerase", a_call, f_FLASH_STRT, 0
+	.word f_romwait
+	.word f_romctlrload
+	.word f_FLASH_PER
+	.word f_or
+	.word f_romctlrstore
+
+	.word f_lit
+	.word CODE_FLASH_BASE
+	.word f_or
+	.word f_FLASH_BASE
+	.word f_FLASH_ADDR
+	.word f_add
+	.word f_store
+
+	.word f_romctlrload
+	.word f_FLASH_STRT
+	.word f_or
+	.word f_romctlrstore
+	.word f_romwait
+
+	.word f_romctlrload
+	.word f_FLASH_PER
+	.word f_bic
+	.word f_romctlrstore
+	.word f_exit
+
+	wdef RAMBAK_ADDR, "RAMBAK_ADDR", a_doconst, f_rom1kerase, 0
+	.word RAMBAK_ADDR
+
+	wdef rambakerase, "rambakerase", a_call, f_RAMBAK_ADDR, 0
+	.word f_RAMBAK_ADDR
+	.word f_rom1kerase
+	.word f_RAMBAK_ADDR
+	.word f_lit
+	.word 1024
+	.word f_add
+	.word f_rom1kerase
+	.word f_exit
+
+	.equ RAM_ADDR, 0x20000000
+	wdef rambakload, "rambakload", a_rambakload, f_rambakerase, 0
+a_rambakload:
+	li wp, RAMBAK_ADDR
+	li xp, RAMBAK_SIZE
+	li yp, RAM_ADDR
+2:
+	beqz xp, 1f
+	lw tos, 0(wp)
+	sw tos, 0(yp)
+	addi wp, wp, addrsize
+	addi yp, yp, addrsize
+	addi xp, xp, -addrsize
+	j 2b
+1:
+	call taskload
+	next
+
+	wdef rambaksave, "rambaksave", a_rambaksave, f_rambakload, 0
+a_rambaksave:
+	call tasksave
+	li wp, RAMBAK_ADDR | CODE_FLASH_BASE
+	li xp, RAMBAK_SIZE
+	li yp, RAM_ADDR
+
+2:
+	beqz xp, 1f
+	lhu tos, 0(yp)
+	sh  tos, 0(wp)
+	addi wp, wp, 2
+	addi yp, yp, 2
+	addi xp, xp, -2
+	j 2b
+1:
+	next
+
+	wdef interpret, "interpret", a_call, f_rambaksave, 0
+	.word f_toinload
+	.word f_branch0
+	.word interpret_nothing
 	.word f_tib
-	.word f_toin
-	.word f_load
+	.word f_toinload
 	.word f_find
 	.word f_dup
 	.word f_branch0
-	.word interpret_noword
+	.word interpret_number
 	.word f_dup
 	.word f_wisimmd
 	.word f_branch0
-	.word 2f
-	.word f_branch
-	.word interpret_execute
-2:
-	.word f_incomp
-	.word f_branch0
-	.word interpret_execute
-	.word f_herepush
-	.word f_branch
-	.word interpret_start
-
+	.word 1f
 interpret_execute:
 	.word f_execute
-	.word f_ssget
-	.word f_ssdund
-	.word f_and
-	.word f_ssdund
-	.word f_equ
+	.word f_ssdchk
 	.word f_branch0
-	.word 1f
+	.word interpret_stackerr
+	.word f_exit
+interpret_stackerr:
 	.word f_2lit
-	.word _str_stk_err
-	.word _str_stk_err_end - _str_stk_err
+	.word _msg_stkerr
+	.word _msg_end_stkerr - _msg_stkerr
 	.word f_type
-	.word f_sprst
-	.word f_ssget
-	.word f_ssdund
-	.word f_bic
-	.word f_ssset
-1:
 	.word f_branch
-	.word interpret_start
+	.word interpret_reset
+1:
+	.word f_compstat
+	.word f_branch0
+	.word interpret_execute
+	.word f_comma
+	.word f_exit
 
-_str_stk_err:
-	.ascii " stack error \n\r"
-_str_stk_err_end:
-	.p2align 2, 0
-
-
-interpret_noword:
+interpret_number:
 	.word f_drop
 	.word f_tib
-	.word f_toin
-	.word f_load
+	.word f_toinload
 	.word f_isnumber
 	.word f_branch0
-	.word interpret_nonum
+	.word interpret_notfound
 	.word f_tib
-	.word f_toin
-	.word f_load
+	.word f_toinload
 	.word f_number
-	.word f_incomp
+	.word f_compstat
 	.word f_branch0
 	.word interpret_nothing
 	.word f_2lit
-	.word _str_lit
+	.word n_lit
 	.word 3
 	.word f_find
-	.word f_herepush
-	.word f_herepush
-	.word f_branch
-	.word interpret_start
-
-_str_lit:
-	.ascii "lit"
-	.p2align 2, 0
-
-interpret_nothing:
-	.word f_branch
-	.word interpret_start
-
-interpret_nonum:
-	.word f_drop
+	.word f_comma
+	.word f_comma
+	.word f_exit
+interpret_notfound:
 	.word f_tib
-	.word f_toin
-	.word f_load
+	.word f_toinload
 	.word f_type
 	.word f_2lit
-	.word str_notfound
-	.word str_end_notfound - str_notfound
+	.word _msg_notfound
+	.word _msg_end_notfound - _msg_notfound
 	.word f_type
+interpret_reset:
 	.word f_sprst
+	.word f_ssrst
+interpret_nothing:
+	.word f_exit
 
-	.word f_branch
-	.word interpret_start
-
-str_notfound:
+_msg_notfound:
 	.ascii " not found\n\r"
-str_end_notfound:
-	.p2align 2, 0
+_msg_end_notfound:
+_msg_stkerr:
+	.ascii " stack error\n\r"
+_msg_end_stkerr:
+	.p2align 2, 0xFF
 
+forth:
+	la up, task_back
+        la wp, task_human
+        sw wp, tnp(up)
+
+        la ip, boot_back
+        la rp, rstk_top_back
+        la sp, dstk_top_back
+	li ss, 0
+	la st, dstk_top_back
+
+        call tasksave
+
+	la up, task_human
+	la wp, task_back
+	sw wp, tnp(up)
+
+	la ip, boot_human
+	la sp, dstk_top_human
+	la rp, rstk_top_human
+	li ss, 0
+	la st, dstk_top_human
+
+	la wp, latest
+	la xp, lastword
+	sw xp, 0(wp)
+
+	la wp, here
+	la xp, dict_base
+	sw xp, 0(wp)
+
+	call tasksave
+
+	next
+
+irq_handler:
+irqcountinc:
+	la t0, irqcount
+	lw t1, 0(t0)
+	addi t1, t1, 1
+	sw t1, 0(t0)
+
+	csrr t0, mcause
+	li t1, ~(1 << 31)
+	and t0, t0, t1
+	li t1, IRQ_STK
+	beq t0, t1, systick_handler
+
+	j irq_exit
+systick_handler:
+	li t0, STK_BASE
+	sw zero, STK_SR(t0)
+
+/*
+	// debug
+	li t0, GPIOA_BASE
+        lw t1, GPIO_OUTDR(t0)
+        xori t1, t1, (1 << 2)
+        sw t1, GPIO_OUTDR(t0)
+*/
+
+	la t0, mscountl
+	lw t1, 0(t0)
+	li t2, -1
+	beq t1, t2, 1f
+	addi t1, t1, 1
+	sw t1, 0(t0)
+	j 2f
+1:
+	sw zero, 0(t0)
+	la t0, mscounth
+	lw t1, 0(t0)
+	addi t1, t1, 1
+	sw t1, 0(t0)
+2:
+	j irq_exit
+
+irq_exit:
+	mret
+
+	.p2align 2, 0xFF
 boot_human:
-	.word f_noop
+	.macro display label, string
+		.section .text
+		.word f_2lit
+		.word _str_\label
+		.word _str_end_\label - _str_\label
+		.word f_type
+		.section .rodata
+	_str_\label:
+		.ascii "\string"
+	_str_end_\label:
+		.section .text
+	.endm
 
 #ifdef TEST
-test_lit_branch0:
+	display test_branch, "branch."
+	.word f_branch
+	.word 1f
+	.word f_fail
+1:
+	.word f_dzchk
+
+	display test_branch0, "branch0."
 	.word f_lit
 	.word 0
 	.word f_branch0
 	.word 1f
 	.word f_fail
 1:
-	.word f_lit
-	.word 1
-	.word f_branch0
-	.word fail
 	.word f_dzchk
 
-test_equ:
-	.word f_lit
-	.word 1
-	.word f_lit
-	.word 1
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
+	display test_yield, "yield."
+	.word f_yield
 
+	display test_drop, "drop."
 	.word f_lit
 	.word 0
-	.word f_lit
-	.word 0
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 1
-	.word f_lit
-	.word 0
-	.word f_equ
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-test_2lit:
-        .word f_2lit
-        .word 0
-        .word 1
-        .word f_lit
-        .word 1
-        .word f_equ
-	.word f_branch0
-	.word fail
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-test_cell:
-	.word f_cell
-	.word f_lit
-	.word addrsize
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-test_depth:
-	.word f_depth
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_depth
-	.word f_depth
-	.word f_lit
-	.word 1
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-test_num2hex:
-	.word f_lit
-	.word 0
-	.word f_num2hex
-	.word f_lit
-	.word '0'
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 9
-	.word f_num2hex
-	.word f_lit
-	.word '9'
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 0xA
-	.word f_num2hex
-	.word f_lit
-	.word 'A'
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 0xF
-	.word f_num2hex
-	.word f_lit
-	.word 'F'
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-test_rshift:
-	.word f_lit
-	.word 1
-	.word f_lit
-	.word 0
-	.word f_rshift
-	.word f_lit
-	.word 1
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 2
-	.word f_lit
-	.word 1
-	.word f_rshift
-	.word f_lit
-	.word 1
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 4
-	.word f_lit
-	.word 2
-	.word f_rshift
-	.word f_lit
-	.word 1
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-test_dup:
-	.word f_lit
-	.word 5
-	.word f_dup
-	.word f_lit
-	.word 5
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_lit
-	.word 5
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-test_spstget:
-	.word f_spget
-	.word f_stget
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-test_load:
-	.word f_lit
-	.word 1f
-	.word f_load
-	.word f_lit
-1:
-	.word 0x55AA4477
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-test_sub:
-	.word f_lit
-	.word 1
-	.word f_lit
-	.word 0
-	.word f_sub
-	.word f_lit
-	.word 1
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-        .word f_lit
-        .word 1
-        .word f_lit
-        .word 1
-        .word f_sub
-        .word f_lit
-        .word 0
-        .word f_equ
-        .word f_branch0
-        .word fail
-        .word f_dzchk
-
-        .word f_lit
-        .word 0
-        .word f_lit
-        .word 1
-        .word f_sub
-        .word f_lit
-        .word -1
-        .word f_equ
-        .word f_branch0
-        .word fail
-        .word f_dzchk
-
-test_eqz:
-	.word f_lit
-	.word 0
-	.word f_eqz
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 1
-	.word f_eqz
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-test_drop:
-	.word f_lit
-	.word 1
 	.word f_drop
 	.word f_dzchk
 
-test_swap:
+	display test_dup, "dup."
 	.word f_lit
 	.word 0
-	.word f_lit
-	.word 1
-	.word f_swap
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_lit
-	.word 1
-	.word f_equ
-	.word f_branch0
-	.word fail
+	.word f_dup
+	.word f_failnz
+	.word f_failnz
 	.word f_dzchk
 
-test_over:
-	.word f_lit
-	.word 0
-	.word f_lit
+	display test_equ, "=."
+	.word f_2lit
 	.word 1
-	.word f_over
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_lit
 	.word 1
 	.word f_equ
-	.word f_branch0
-	.word fail
-
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
+	.word f_failez
 	.word f_dzchk
 
-test_branch:
-	.word f_branch
-	.word 1f
-	.word fail
-1:
-	.word f_dzchk
-
-test_dec:
-	.word f_lit
+	.word f_2lit
 	.word 1
-	.word f_dec
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_lit
-	.word 2
-	.word f_dec
-	.word f_lit
-	.word 1
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-	
-	.word f_lit
-	.word 0
-	.word f_dec
-	.word f_lit
-	.word -1
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-test_isspace:
-	.word f_lit
-	.word ' '
-	.word f_isspace
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 'a'
-	.word f_isspace
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-test_or:
-	.word f_lit
-	.word 0
-	.word f_lit
-	.word 1
-	.word f_or
-	.word f_lit
-	.word 1
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 1
-	.word f_lit
-	.word 0
-	.word f_or
-	.word f_lit
-	.word 1
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 1
-	.word f_lit
-	.word 1
-	.word f_or
-	.word f_lit
-	.word 1
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 0
-	.word f_lit
-	.word 0
-	.word f_or
-	.word f_lit
-	.word 0
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-test_isnewline:
-	.word f_lit
-	.word '\n'
-	.word f_isnewline
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word '\r'
-	.word f_isnewline
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 'a'
-	.word f_isnewline
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-test_isdelete:
-	.word f_lit
-	.word '\b'
-	.word f_isdelete
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 0x7F
-	.word f_isdelete
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 0
-	.word f_isdelete
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-test_store:
-	.word f_lit
-	.word 5
-	.word f_toin
-	.word f_store
-	.word f_toin
-	.word f_load
-	.word f_lit
-	.word 5
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_toinrst
-	.word f_toin
-	.word f_load
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-test_inc:
-	.word f_lit
-	.word 0
-	.word f_inc
-	.word f_lit
-	.word 1
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 1
-	.word f_inc
-	.word f_lit
 	.word 2
 	.word f_equ
-	.word f_branch0
-	.word fail
+	.word f_failnz
 	.word f_dzchk
 
-	.word f_lit
-	.word -1
-	.word f_inc
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-test_cstore:
-	.word f_lit
-	.word 0x55
-	.word f_tib
-	.word f_cstore
-	.word f_dzchk
-	.word f_lit
-	.word 0xAA
-	.word f_tib
-	.word f_inc
-	.word f_cstore
-	.word f_dzchk
-
-	.word f_tib
-	.word f_cload
-	.word f_lit
-	.word 0x55
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_tib
-	.word f_inc
-	.word f_cload
-	.word f_lit
-	.word 0xAA
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-test_lt:
-	.word f_lit
+	display test_add, "+."
+	.word f_2lit
 	.word 0
-	.word f_lit
 	.word 1
-	.word f_lt
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 1
-	.word f_lit
-	.word 2
-	.word f_lt
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word -1
-	.word f_lit
-	.word 0
-	.word f_lt
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word -2
-	.word f_lit
-	.word -1
-	.word f_lt
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 0
-	.word f_lit
-	.word 0
-	.word f_lt
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_lit
-	.word 1
-	.word f_lit
-	.word 0
-	.word f_lt
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_lit
-	.word -1
-	.word f_lit
-	.word -2
-	.word f_lt
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-test_gt:
-	.word f_lit
-	.word 1
-	.word f_lit
-	.word 0
-	.word f_gt
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 0
-	.word f_lit
-	.word -1
-	.word f_gt
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 2
-	.word f_lit
-	.word 1
-	.word f_gt
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word -1
-	.word f_lit
-	.word -2
-	.word f_gt
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 0
-	.word f_lit
-	.word 0
-	.word f_gt
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_lit
-	.word 0
-	.word f_lit
-	.word 0
-	.word f_gt
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_lit
-	.word 0
-	.word f_lit
-	.word 1
-	.word f_gt
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_lit
-	.word -1
-	.word f_lit
-	.word 0
-	.word f_gt
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_lit
-	.word -2
-	.word f_lit
-	.word -1
-	.word f_gt
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-test_2dup:
-	.word f_lit
-	.word 0
-	.word f_lit
-	.word 1
-	.word f_2dup
+	.word f_add
 	.word f_lit
 	.word 1
 	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_lit
-	.word 0
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_lit
-	.word 1
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_lit
-	.word 0
-	.word f_equ
-	.word f_branch0
-	.word fail
+	.word f_failez
 	.word f_dzchk
 
-test_rot:
-	.word f_lit
-	.word 0
-	.word f_lit
+	.word f_2lit
 	.word 1
-	.word f_lit
-	.word 2
-	.word f_rot
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_lit
-	.word 2
-	.word f_equ
-	.word f_branch0
-	.word fail
+	.word 0
+	.word f_add
 	.word f_lit
 	.word 1
 	.word f_equ
-	.word f_branch0
-	.word fail
+	.word f_failez
 	.word f_dzchk
 
-test_ge:
-	.word f_lit
+	.word f_2lit
 	.word 0
-	.word f_lit
 	.word 0
-	.word f_ge
-	.word f_branch0
-	.word fail
+	.word f_add
+	.word f_failnz
 	.word f_dzchk
 
-	.word f_lit
+	.word f_2lit
 	.word 1
-	.word f_lit
-	.word 0
-	.word f_ge
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 2
-	.word f_lit
-	.word 1
-	.word f_ge
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 0
-	.word f_lit
-	.word -1
-	.word f_ge
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 0
-	.word f_lit
-	.word 1
-	.word f_ge
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_lit
-	.word -1
-	.word f_lit
-	.word 0
-	.word f_ge
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_lit
-	.word -2
-	.word f_lit
-	.word -1
-	.word f_ge
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-test_le:
-	.word f_lit
-	.word 1
-	.word f_lit
-	.word 1
-	.word f_le
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 0
-	.word f_lit
-	.word 1
-	.word f_le
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word -1
-	.word f_lit
-	.word 0
-	.word f_le
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word -2
-	.word f_lit
-	.word -1
-	.word f_le
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 1
-	.word f_lit
-	.word 0
-	.word f_le
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-test_and:
-	.word f_lit
-	.word 1
-	.word f_lit
-	.word 0
-	.word f_and
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_lit
-	.word 0
-	.word f_lit
-	.word 1
-	.word f_and
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_lit
-	.word 0
-	.word f_lit
-	.word 0
-	.word f_and
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_lit
-	.word 1
-	.word f_lit
-	.word 1
-	.word f_and
-	.word f_lit
-	.word 1
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-test_within:
-	.word f_lit
-	.word 1
-	.word f_lit
-	.word 2
-	.word f_lit
-	.word 3
-	.word f_within
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_lit
-	.word 3
-	.word f_lit
-	.word 2
-	.word f_lit
-	.word 3
-	.word f_within
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_lit
-	.word 4
-	.word f_lit
-	.word 2
-	.word f_lit
-	.word 3
-	.word f_within
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_lit
-	.word 1
-	.word f_lit
-	.word 1
-	.word f_lit
-	.word 3
-	.word f_within
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 2
-	.word f_lit
-	.word 1
-	.word f_lit
-	.word 3
-	.word f_within
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-test_add:
-	.word f_lit
-	.word 1
-	.word f_lit
 	.word 1
 	.word f_add
 	.word f_lit
 	.word 2
 	.word f_equ
-	.word f_branch0
-	.word fail
+	.word f_failez
 	.word f_dzchk
 
-        .word f_lit
-        .word 0
-        .word f_lit
-        .word 1
-        .word f_add
-        .word f_lit
-        .word 1
-        .word f_equ
-        .word f_branch0
-        .word fail
-        .word f_dzchk
+	.word f_2lit
+	.word -1
+	.word 1
+	.word f_add
+	.word f_failnz
+	.word f_dzchk
 
-        .word f_lit
-        .word -1
-        .word f_lit
-        .word 1
-        .word f_add
-        .word f_branch0
-        .word 1f
-	.word f_fail
-1:
-        .word f_dzchk
-
-test_tipush:
+	.word f_2lit
+	.word -1
+	.word -1
+	.word f_add
 	.word f_lit
-	.word 0xF5
-	.word f_tipush
+	.word -2
+	.word f_equ
+	.word f_failez
 	.word f_dzchk
-	.word f_toin
-	.word f_load
+
+	display test_inc, "1+."
+	.word f_lit
+	.word 0
+	.word f_inc
 	.word f_lit
 	.word 1
 	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_tib
+	.word f_failez
+	.word f_dzchk
+
+	.word f_lit
+	.word 1
+	.word f_inc
+	.word f_lit
+	.word 2
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_lit
+	.word -2
+	.word f_inc
+	.word f_lit
+	.word -1
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_lit
+	.word -1
+	.word f_inc
+	.word f_failnz
+	.word f_dzchk
+
+	display test_sub, "-."
+	.word f_2lit
+	.word 1
+	.word 1
+	.word f_sub
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word 2
+	.word 1
+	.word f_sub
+	.word f_lit
+	.word 1
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_2lit
+	.word 0
+	.word 1
+	.word f_sub
+	.word f_lit
+	.word -1
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_2lit
+	.word 1
+	.word 0
+	.word f_sub
+	.word f_lit
+	.word 1
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_2lit
+	.word -1
+	.word 1
+	.word f_sub
+	.word f_lit
+	.word -2
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	display test_dec, "1-."
+	.word f_lit
+	.word 1
+	.word f_dec
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_lit
+	.word 2
+	.word f_dec
+	.word f_lit
+	.word 1
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_lit
+	.word 0
+	.word f_dec
+	.word f_lit
+	.word -1
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_lit
+	.word -1
+	.word f_dec
+	.word f_lit
+	.word -2
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	display test_2drop, "2drop."
+	.word f_2lit
+	.word 0
+	.word 1
+	.word f_2drop
+	.word f_dzchk
+
+	display test_swap, "swap."
+	.word f_2lit
+	.word 0
+	.word 1
+	.word f_swap
+	.word f_failnz
+	.word f_lit
+	.word 1
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	display test_cload, "c@."
+	.word f_lit
+	.word 1f
 	.word f_cload
 	.word f_lit
-	.word 0xF5
+1:
+	.word 0x55
 	.word f_equ
-	.word f_branch0
-	.word fail
+	.word f_failez
+	.word f_dzchk
 
-	.word f_toinmax
-	.word f_dec
+	display test_spget_stget, "st@.sp@."
+	.word f_spget
+	.word f_stget
+	.word f_swap
+	.word f_sub
+	.word f_failnz
+	.word f_dzchk
+
+	display test_cell, "cell."
+	.word f_cell
+	.word f_lit
+	.word addrsize
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	display test_rshift, "rshift."
+	.word f_2lit
+	.word 2
+	.word 1
+	.word f_rshift
+	.word f_lit
+	.word 1
+	.word f_equ
+	.word f_failez
+
+	.word f_2lit
+	.word 4
+	.word 1
+	.word f_rshift
+	.word f_lit
+	.word 2
+	.word f_equ
+	.word f_failez
+
+	.word f_2lit
+	.word 8
+	.word 1
+	.word f_rshift
+	.word f_lit
+	.word 4
+	.word f_equ
+	.word f_failez
+
+	display test_2div, "2/."
+	.word f_lit
+	.word 2
+	.word f_2div
+	.word f_lit
+	.word 1
+	.word f_equ
+	.word f_failez
+
+	.word f_lit
+	.word 4
+	.word f_2div
+	.word f_lit
+	.word 2
+	.word f_equ
+	.word f_failez
+
+	display test_celldiv, "cell/."
+	.word f_cell
+	.word f_celldiv
+	.word f_lit
+	.word 1
+	.word f_equ
+	.word f_failez
+
+	display test_depth, "depth."
+	.word f_depth
+	.word f_failnz
+	.word f_lit
+	.word 0
+	.word f_depth
+	.word f_lit
+	.word 1
+	.word f_equ
+	.word f_failez
+	.word f_failnz
+	.word f_2lit
+	.word 0
+	.word 1
+	.word f_depth
+	.word f_lit
+	.word 2
+	.word f_equ
+	.word f_failez
+	.word f_lit
+	.word 1
+	.word f_equ
+	.word f_failez
+	.word f_failnz
+	.word f_dzchk
+
+	display test_and, "and."
+	.word f_2lit
+	.word 0
+	.word 0
+	.word f_and
+	.word f_failnz
+
+	.word f_2lit
+	.word 1
+	.word 0
+	.word f_and
+	.word f_failnz
+
+	.word f_2lit
+	.word 0
+	.word 1
+	.word f_and
+	.word f_failnz
+
+	.word f_2lit
+	.word 1
+	.word 1
+	.word f_and
+	.word f_lit
+	.word 1
+	.word f_equ
+	.word f_failez
+
+	display test_num2hex, "num2hex."
+	.word f_lit
+	.word 0
+	.word f_num2hex
+	.word f_lit
+	.word '0'
+	.word f_equ
+	.word f_failez
+
+	.word f_lit
+	.word 9
+	.word f_num2hex
+	.word f_lit
+	.word '9'
+	.word f_equ
+	.word f_failez
+
+	.word f_lit
+	.word 0xA
+	.word f_num2hex
+	.word f_lit
+	.word 'A'
+	.word f_equ
+	.word f_failez
+
+	.word f_lit
+	.word 0xF
+	.word f_num2hex
+	.word f_lit
+	.word 'F'
+	.word f_equ
+	.word f_failez
+
+	.word f_lit
+	.word 0x10
+	.word f_num2hex
+	.word f_lit
+	.word '0'
+	.word f_equ
+	.word f_failez
+
+	display test_hex, "hex4.hex8.hex16.hex32."
+	.word f_lit
+	.word '['
+	.word f_emit
+	.word f_lit
+	.word 0x0
+	.word f_hex4
+	.word f_dzchk
+	.word f_lit
+	.word 0x12
+	.word f_hex8
+	.word f_dzchk
+	.word f_lit
+	.word 0x3456
+	.word f_hex16
+	.word f_dzchk
+	.word f_lit
+	.word 0x789ABCDE
+	.word f_hex32
+	.word f_dzchk
+	.word f_lit
+	.word -1
+	.word f_hex32
+	.word f_dzchk
+	.word f_lit
+	.word ']'
+	.word f_emit
+
+	display test_load, "@."
+	.word f_lit
+	.word 1f
+	.word f_load
+	.word f_lit
+1:
+	.word 0x55AA77FF
+	.word f_equ
+	.word f_failez
+
+	display test_dsdump, ".s."
+	.word f_lit
+	.word '['
+	.word f_emit
+	.word f_dsdump
+	.word f_lit
+	.word 1
+	.word f_dsdump
+	.word f_2lit
+	.word 2
+	.word 3
+	.word f_dsdump
+	.word f_2drop
+	.word f_drop
+	.word f_dsdump
+	.word f_lit
+	.word ']'
+	.word f_emit
+	.word f_dzchk
+
+	display test_or, "or."
+	.word f_2lit
+	.word 0
+	.word 0
+	.word f_or
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word 0
+	.word 1
+	.word f_or
+	.word f_lit
+	.word 1
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_2lit
+	.word 1
+	.word 0
+	.word f_or
+	.word f_lit
+	.word 1
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_2lit
+	.word 1
+	.word 1
+	.word f_or
+	.word f_lit
+	.word 1
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	display test_isnl, "isnl."
+	.word f_lit
+	.word '\n'
+	.word f_isnl
+	.word f_failez
+	.word f_dzchk
+
+	.word f_lit
+	.word '\r'
+	.word f_isnl
+	.word f_failez
+	.word f_dzchk
+	
+	.word f_lit
+	.word 'a'
+	.word f_isnl
+	.word f_failnz
+	.word f_dzchk
+
+	display test_isdel, "isdel."
+	.word f_lit
+	.word '\b'
+	.word f_isdel
+	.word f_failez
+	.word f_dzchk
+
+	.word f_lit
+	.word 0x7F
+	.word f_isdel
+	.word f_failez
+	.word f_dzchk
+
+	.word f_lit
+	.word 'a'
+	.word f_isdel
+	.word f_failnz
+	.word f_dzchk
+
+	display test_tib_toin, "tib.>in."
+	.word f_tib
+	.word f_lit
+	.word tib
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_toin
+	.word f_lit
+	.word toin
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	display test_toinchk, ">inchk."
+	.word f_lit
+	.word tib_top - tib
+	.word f_toin
+	.word f_store
+	.word f_toinchk
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_lit
+	.word -1
+	.word f_toin
+	.word f_store
+	.word f_toinchk
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_lit
+	.word 0
+	.word f_toin
+	.word f_store
+	.word f_toinchk
+	.word f_failez
+	.word f_dzchk
+
+	display test_toinrst, ">inrst.>in@."
+	.word f_toinrst
+	.word f_toinload
+	.word f_failnz
+	.word f_dzchk
+
+	display test_tipush_tidrop, "tipush.tidrop."
+	.word f_lit
+	.word 0x55
+	.word f_tipush
+	.word f_dzchk
+	.word f_tidrop
+	.word f_dzchk
+	.word f_toinload
+	.word f_failnz
+	.word f_tidrop
+	.word f_toinload
+	.word f_failnz
+	.word f_tidrop
+	.word f_toinload
+	.word f_failnz
+	.word f_lit
+	.word tib_top - tib
 	.word f_toin
 	.word f_store
 	.word f_lit
-	.word 0x0
+	.word 0
 	.word f_tipush
-	.word f_toin
-	.word f_load
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
+	.word f_toinload
+	.word f_lit
+	.word tib_top - tib
+	.word f_equ
+	.word f_failez
 	.word f_dzchk
+	.word f_toinrst
 
-test_tidrop:
-	.word f_lit
-	.word 0xFA
-	.word f_tipush
-	.word f_tidrop
-	.word f_toin
-	.word f_load
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_tidrop
-	.word f_toin
-	.word f_load
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-test_min:
-	.word f_lit
-	.word 0
-	.word f_lit
-	.word 1
-	.word f_min
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_lit
-	.word 1
-	.word f_lit
-	.word 0
-	.word f_min
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_lit
-	.word -1
-	.word f_lit
-	.word 0
-	.word f_min
+	display test_true_flase, "true.false."
+	.word f_true
 	.word f_lit
 	.word -1
 	.word f_equ
-	.word f_branch0
-	.word fail
+	.word f_failez
 	.word f_dzchk
 
-	.word f_lit
-	.word -2
-	.word f_lit
-	.word -1
+	.word f_false
+	.word f_failnz
+	.word f_dzchk
+
+	display test_min, "min."
+	.word f_2lit
+	.word 1
+	.word 0
 	.word f_min
-	.word f_lit
-	.word -2
-	.word f_equ
-	.word f_branch0
-	.word fail
+	.word f_failnz
 	.word f_dzchk
 
-test_tor_fromr:
+	.word f_2lit
+	.word 0
+	.word 1
+	.word f_min
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word 0
+	.word 0
+	.word f_min
+	.word f_failnz
+	.word f_dzchk
+
+	display test_tor_fromr, ">r.r>."
 	.word f_lit
-	.word 0x5A
+	.word 0
 	.word f_tor
 	.word f_dzchk
 	.word f_fromr
-	.word f_lit
-	.word 0x5A
-	.word f_equ
-	.word f_branch0
-	.word fail
+	.word f_failnz
 	.word f_dzchk
 
-test_2swap:
-	.word f_lit
+	display test_rot, "rot."
+	.word f_2lit
 	.word 1
-	.word f_lit
 	.word 2
 	.word f_lit
 	.word 3
+	.word f_rot
 	.word f_lit
+	.word 1
+	.word f_equ
+	.word f_failez
+	.word f_lit
+	.word 3
+	.word f_equ
+	.word f_failez
+	.word f_lit
+	.word 2
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	display test_compare, "compare."
+	.word f_2lit
+	.word -1
+	.word 0
+	.word f_2lit
+	.word -1
+	.word 0
+	.word f_compare
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word -1
+	.word 0
+	.word f_2lit
+	.word -1
+	.word 1
+	.word f_compare
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word _cmp0
+	.word 5
+	.word f_2lit
+	.word _cmp1
+	.word 5
+	.word f_compare
+	.word f_failez
+	.word f_dzchk
+
+	.word f_2lit
+	.word _cmp0
+	.word 6
+	.word f_2lit
+	.word _cmp1
+	.word 5
+	.word f_compare
+	.word f_failez
+	.word f_dzchk
+
+	.word f_2lit
+	.word _cmp0
+	.word 6
+	.word f_2lit
+	.word _cmp1
+	.word 6
+	.word f_compare
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word _cmp0
+	.word 6
+	.word f_2lit
+	.word _cmp1
+	.word 7
+	.word f_compare
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_branch
+	.word 1f
+_cmp0:
+	.ascii "HelloWorld"
+_cmp1:
+	.ascii "HelloRISCV"
+	.p2align 2, 0xFF
+1:
+
+	display test_latest, "latest."
+	.word f_latest
+	.word f_load
+	.word f_latestload
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_latestload
+	.word f_lit
+	.word 5
+	.word f_lateststore
+	.word f_latestload
+	.word f_lit
+	.word 5
+	.word f_equ
+	.word f_failez
+	.word f_lateststore
+	.word f_dzchk
+
+	display test_wlinkload, "wlink@."
+	.word f_lit
+	.word f_fail
+	.word f_wlinkload
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_lit
+	.word f_okay
+	.word f_wlinkload
+	.word f_lit
+	.word f_fail
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	display test_wnlenload, "wnlen@."
+	.word f_lit
+	.word f_okay
+	.word f_wnlenload
+	.word f_lit
+	.word 4
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_lit
+	.word f_key
+	.word f_wnlenload
+	.word f_lit
+	.word 3
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	display test_wnameload, "wname@."
+	.word f_lit
+	.word f_okay
+	.word f_wnameload
+	.word f_lit
+	.word n_okay
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_lit
+	.word f_emit
+	.word f_wnameload
+	.word f_lit
+	.word n_emit
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	display test_over, "over."
+	.word f_2lit
+	.word 0
+	.word 1
+	.word f_over
+	.word f_failnz
+	.word f_lit
+	.word 1
+	.word f_equ
+	.word f_failez
+	.word f_failnz
+	.word f_dzchk
+
+	display test_words, "words."
+	.word f_lit
+	.word '['
+	.word f_emit
+
+	.word f_words
+	.word f_dzchk
+
+	.word f_lit
+	.word ']'
+	.word f_emit
+
+	display test_2dup, "2dup."
+	.word f_2lit
+	.word 6
+	.word 4
+	.word f_2dup
+	.word f_lit
+	.word 4
+	.word f_equ
+	.word f_failez
+
+	.word f_lit
+	.word 6
+	.word f_equ
+	.word f_failez
+
+	.word f_lit
+	.word 4
+	.word f_equ
+	.word f_failez
+
+	.word f_lit
+	.word 6
+	.word f_equ
+	.word f_failez
+
+	.word f_dzchk
+
+	display test_2swap, "2swap."
+	.word f_2lit
+	.word 8
+	.word 9
+	.word f_2lit
+	.word 6
 	.word 4
 	.word f_2swap
+
+	.word f_lit
+	.word 9
+	.word f_equ
+	.word f_failez
+	.word f_lit
+	.word 8
+	.word f_equ
+	.word f_failez
+	.word f_lit
+	.word 4
+	.word f_equ
+	.word f_failez
+	.word f_lit
+	.word 6
+	.word f_equ
+	.word f_failez
+
+	.word f_dzchk
+
+	display test_2over, "2over."
+	.word f_2lit
+	.word 1
+	.word 2
+	.word f_2lit
+	.word 3
+	.word 4
+	.word f_2over
+
 	.word f_lit
 	.word 2
 	.word f_equ
-	.word f_branch0
-	.word fail
+	.word f_failez
+
 	.word f_lit
 	.word 1
 	.word f_equ
-	.word f_branch0
-	.word fail
+	.word f_failez
+
 	.word f_lit
 	.word 4
 	.word f_equ
-	.word f_branch0
-	.word fail
+	.word f_failez
+
 	.word f_lit
 	.word 3
 	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-test_compare:
-	.word f_lit
-	.word 0
-	.word f_dup
-	.word f_dup
-	.word f_dup
-	.word f_compare
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
+	.word f_failez
 
 	.word f_lit
-	.word test_compare
-	.word f_lit
-	.word 9
-	.word f_2dup
-	.word f_compare
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-
-	.word f_lit	
-	.word _cmp0
-	.word f_lit
-	.word 6
-	.word f_lit
-	.word _cmp1
-	.word f_lit
-	.word 7
-	.word f_compare
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word _cmp0
-	.word f_lit
-	.word 7
-	.word f_lit
-	.word _cmp1
-	.word f_lit
-	.word 7
-	.word f_compare
-	.word f_branch0
-	.word 1f
-	.word f_fail
-_cmp0:
-	.ascii "Hello Alice"
-_cmp1:
-	.ascii "Hello Jack"
-	.p2align 2, 0
-1:
-	.word f_dzchk
-
-test_wlinkget:
-	.word f_lit
-	.word f_uuu
-	.word f_wlinkget
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_lit
-	.word f_fail
-	.word f_wlinkget
-	.word f_lit
-	.word f_uuu
+	.word 2
 	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
+	.word f_failez
 
-test_wnlenget:
-	.word f_lit
-	.word f_uuu
-	.word f_wnlenget
-	.word f_lit
-	.word 3
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word f_fail
-	.word f_wnlenget
-	.word f_lit
-	.word 4
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-test_wnameget:
-	.word f_lit
-	.word f_uuu
-	.word f_wnameget
-	.word f_lit
-	.word n_uuu
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-        .word f_lit
-        .word f_fail
-        .word f_wnameget
-        .word f_lit
-        .word n_fail
-        .word f_equ
-        .word f_branch0
-        .word fail
-        .word f_dzchk
-
-test_2over:
-	.word f_lit
-	.word 5
-	.word f_lit
-	.word 6
-	.word f_lit
-	.word 7
-	.word f_lit
-	.word 8
-	.word f_2over
-	.word f_lit
-	.word 6
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_lit
-	.word 5
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_lit
-	.word 8
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_lit
-	.word 7
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_lit
-	.word 6
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_lit
-	.word 5
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-test_nip:
-	.word f_lit
-	.word 0
 	.word f_lit
 	.word 1
+	.word f_equ
+	.word f_failez
+
+	.word f_dzchk
+
+	display test_nip, "nip."
+	.word f_2lit
+	.word 1
+	.word 0
 	.word f_nip
+	.word f_failnz
+	.word f_dzchk
+
+	display test_find, "find."
+	.word f_2lit
+	.word 0
+	.word 0
+	.word f_find
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word _find0
+	.word 4
+	.word f_find
+	.word f_lit
+	.word f_fail
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_2lit
+	.word _find1
+	.word 5
+	.word f_find
+	.word f_lit
+	.word f_words
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_2lit
+	.word _find1
+	.word 6
+	.word f_find
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_branch
+	.word 1f
+_find0:
+	.ascii "fail"
+_find1:
+	.ascii "words"
+	.p2align 2, 0xFF
+1:
+
+	display test_execute, "execute."
+	.word f_lit
+	.word f_noop
+	.word f_execute
+	.word f_dzchk
+
+	.word f_lit
+	.word 5
+	.word f_lit
+	.word f_inc
+	.word f_execute
+	.word f_lit
+	.word 6
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_2lit
+	.word 1
+	.word 2
+	.word f_lit
+	.word f_add
+	.word f_execute
+	.word f_lit
+	.word 3
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	display test_ss, "ss@.ss!.ssrst."
+	.word f_lit
+	.word 999
+	.word f_ssset
+	.word f_ssget
+	.word f_lit
+	.word 999
+	.word f_equ
+	.word f_failez
+
+	.word f_ssrst
+	.word f_ssget
+	.word f_failnz
+	.word f_dzchk
+
+	display test_xor, "xor."
+	.word f_2lit
+	.word 0
+	.word 0
+	.word f_xor
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word 1
+	.word 1
+	.word f_xor
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word 1
+	.word 0
+	.word f_xor
 	.word f_lit
 	.word 1
 	.word f_equ
-	.word f_branch0
-	.word fail
+	.word f_failez
 	.word f_dzchk
 
-test_find:
+	.word f_2lit
+	.word 0
+	.word 1
+	.word f_xor
 	.word f_lit
-	.word _f0
+	.word 1
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	display test_invert, "invert."
+	.word f_lit
+	.word -1
+	.word f_invert
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_lit
+	.word 0
+	.word f_invert
+	.word f_lit
+	.word -1
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_lit
+	.word 1
+	.word f_invert
+	.word f_lit
+	.word -2
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_lit
+	.word -2
+	.word f_invert
+	.word f_lit
+	.word 1
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	display test_neq, "<>."
+	.word f_2lit
+	.word 0
+	.word 0
+	.word f_neq
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word 1
+	.word 1
+	.word f_neq
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word 0
+	.word 1
+	.word f_neq
+	.word f_failez
+	.word f_dzchk
+
+	display test_eqz, "0=."
+	.word f_lit
+	.word 0
+	.word f_eqz
+	.word f_failez
+	.word f_dzchk
+
+	.word f_lit
+	.word 1
+	.word f_eqz
+	.word f_failnz
+	.word f_dzchk
+
+	display test_ssdchk, "ssdchk."
+	.word f_ssdund
+	.word f_ssset
+	.word f_ssdchk
+	.word f_failnz
+
+	.word f_ssrst
+	.word f_ssdchk
+	.word f_failez
+	.word f_dzchk
+
+	display test_sprst, "sprst."
+	.word f_2lit
+	.word 5
+	.word 6
+	.word f_sprst
+	.word f_dzchk
+
+	display test_lt, "<."
+	.word f_2lit
+	.word 0
+	.word 0
+	.word f_lt
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word 1
+	.word 0
+	.word f_lt
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word 0
+	.word -1
+	.word f_lt
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word 0
+	.word 1
+	.word f_lt
+	.word f_failez
+	.word f_dzchk
+
+	.word f_2lit
+	.word 1
+	.word 2
+	.word f_lt
+	.word f_failez
+	.word f_dzchk
+
+	.word f_2lit
+	.word -1
+	.word 0
+	.word f_lt
+	.word f_failez
+	.word f_dzchk
+
+	display test_gt, ">."
+	.word f_2lit
+	.word 0
+	.word 1
+	.word f_gt
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word -1
+	.word 0
+	.word f_gt
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word 0
+	.word 0
+	.word f_gt
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word 1
+	.word 0
+	.word f_gt
+	.word f_failez
+	.word f_dzchk
+
+	.word f_2lit
+	.word 2
+	.word 1
+	.word f_gt
+	.word f_failez
+	.word f_dzchk
+
+	.word f_2lit
+	.word 0
+	.word -1
+	.word f_gt
+	.word f_failez
+	.word f_dzchk
+
+	display test_ge, ">=."
+	.word f_2lit
+	.word 0
+	.word 1
+	.word f_ge
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word 1
+	.word 2
+	.word f_ge
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word -1
+	.word 0
+	.word f_ge
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word 0
+	.word 0
+	.word f_ge
+	.word f_failez
+	.word f_dzchk
+
+	.word f_2lit
+	.word 1
+	.word 0
+	.word f_ge
+	.word f_failez
+	.word f_dzchk
+
+	.word f_2lit
+	.word 2
+	.word 1
+	.word f_ge
+	.word f_failez
+	.word f_dzchk
+
+	.word f_2lit
+	.word 0
+	.word -1
+	.word f_ge
+	.word f_failez
+	.word f_dzchk
+
+	display test_le, "<=."
+	.word f_2lit
+	.word 1
+	.word 0
+	.word f_le
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word 0
+	.word -1
+	.word f_le
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word 2
+	.word 1
+	.word f_le
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word 0
+	.word 0
+	.word f_le
+	.word f_failez
+	.word f_dzchk
+
+	.word f_2lit
+	.word -1
+	.word 0
+	.word f_le
+	.word f_failez
+	.word f_dzchk
+
+	.word f_2lit
+	.word 1
+	.word 2
+	.word f_le
+	.word f_failez
+	.word f_dzchk
+
+
+	.word f_2lit
+	.word 0
+	.word 1
+	.word f_le
+	.word f_failez
+	.word f_dzchk
+
+	display test_within, "within."
+
+	.word f_lit
+	.word 0
+	.word f_2lit
+	.word 1
+	.word 3
+	.word f_within
+	.word f_failnz
+	.word f_dzchk
+
 	.word f_lit
 	.word 3
-	.word f_find
-	.word f_lit
-	.word f_uuu
-	.word f_equ
-	.word f_branch0
-	.word fail
+	.word f_2lit
+	.word 1
+	.word 3
+	.word f_within
+	.word f_failnz
 	.word f_dzchk
 
 	.word f_lit
-	.word _f1
-	.word f_lit
-	.word 4
-	.word f_find
-	.word f_branch0
-	.word 1f
-	.word f_fail
-_f0:
-	.ascii "uuu"
-_f1:
-	.ascii "asdf"
-	.p2align 2, 0
-1:
+	.word 1
+	.word f_2lit
+	.word 1
+	.word 3
+	.word f_within
+	.word f_failez
 	.word f_dzchk
 
-test_execute:
 	.word f_lit
-	.word f_false
-	.word f_execute
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
+	.word 2
+	.word f_2lit
+	.word 1
+	.word 3
+	.word f_within
+	.word f_failez
 	.word f_dzchk
 
-test_isxdigit:
+	display test_isxdigit, "isxdigit."
 	.word f_lit
 	.word '0'
 	.word f_isxdigit
-	.word f_branch0
-	.word fail
+	.word f_failez
 	.word f_dzchk
 
 	.word f_lit
 	.word '9'
 	.word f_isxdigit
-	.word f_branch0
-	.word fail
+	.word f_failez
 	.word f_dzchk
 
 	.word f_lit
 	.word 'A'
 	.word f_isxdigit
-	.word f_branch0
-	.word fail
+	.word f_failez
 	.word f_dzchk
 
 	.word f_lit
 	.word 'F'
 	.word f_isxdigit
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
-	.word 'n'
-	.word f_isxdigit
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
+	.word f_failez
 	.word f_dzchk
 
 	.word f_lit
 	.word '0' - 1
 	.word f_isxdigit
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_lit
-	.word '0' - 1
-	.word f_isxdigit
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
+	.word f_failnz
 	.word f_dzchk
 
 	.word f_lit
 	.word '9' + 1
 	.word f_isxdigit
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
+	.word f_failnz
 	.word f_dzchk
 
 	.word f_lit
 	.word 'A' - 1
 	.word f_isxdigit
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
+	.word f_failnz
 	.word f_dzchk
 
 	.word f_lit
 	.word 'F' + 1
 	.word f_isxdigit
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-test_isnumber:
-	.word f_lit
-	.word 0
-	.word f_lit
-	.word 0
-	.word f_isnumber
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
+	.word f_failnz
 	.word f_dzchk
 
 	.word f_lit
+	.word 'm'
+	.word f_isxdigit
+	.word f_failnz
+	.word f_dzchk
+
+	display test_isnumber, "isnumber."
+	.word f_2lit
 	.word _num0
-	.word f_lit
-	.word 5
+	.word 3
 	.word f_isnumber
-	.word f_branch0
-	.word fail
+	.word f_failez
 	.word f_dzchk
 
-	.word f_lit
+	.word f_2lit
 	.word _num1
-	.word f_lit
-	.word 5
+	.word 4
 	.word f_isnumber
-	.word f_branch0
-	.word fail
+	.word f_failez
 	.word f_dzchk
 
-	.word f_lit
+	.word f_2lit
 	.word _num2
-	.word f_lit
-	.word 5
+	.word 4
 	.word f_isnumber
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
+	.word f_failnz
 	.word f_dzchk
 
-	.word f_lit
+
+	.word f_2lit
 	.word _num3
-	.word f_lit
-	.word 5
+	.word 6
 	.word f_isnumber
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
+	.word f_failnz
 	.word f_dzchk
 
-	.word f_lit
+	.word f_2lit
 	.word _num4
-	.word f_lit
+	.word 6
+	.word f_isnumber
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word _num5
 	.word 5
 	.word f_isnumber
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word _num6
+	.word 5
+	.word f_isnumber
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word _num7
+	.word 2
+	.word f_isnumber
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word 0
+	.word 1
+	.word f_isnumber
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word 0
+	.word 0
+	.word f_isnumber
+	.word f_failnz
+	.word f_dzchk
 
 	.word f_branch
 	.word 1f
 _num0:
-	.ascii "AB123"
+	.ascii "0x0"
 _num1:
-	.ascii "DEF11"
+	.ascii "0x12"
 _num2:
-	.ascii " EF11"
+	.ascii "1234"
 _num3:
-	.ascii "EF11 "
+	.ascii "0x12 4"
 _num4:
-	.ascii "EF 11"
-	.p2align 2, 0
+	.ascii "0x123 "
+_num5:
+	.ascii " x123"
+_num6:
+	.ascii "  123"
+_num7:
+	.ascii "0x"
+	.p2align 2, 0xFF
 1:
-	.word f_dzchk
 
-test_lshift:
-	.word f_lit
+	display test_lshift, "lshift."
+	.word f_2lit
 	.word 1
-	.word f_lit
 	.word 0
 	.word f_lshift
 	.word f_lit
 	.word 1
 	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
+	.word f_failez
 
-        .word f_lit
-        .word 1
-        .word f_lit
-        .word 1
-        .word f_lshift
-        .word f_lit
-        .word 2
-        .word f_equ
-        .word f_branch0
-        .word fail
-        .word f_dzchk
-
-        .word f_lit
-        .word 1
-        .word f_lit
-        .word 2
-        .word f_lshift
-        .word f_lit
-        .word 4
-        .word f_equ
-        .word f_branch0
-        .word fail
-        .word f_dzchk
-
-        .word f_lit
-        .word 1
-        .word f_lit
-        .word 3
-        .word f_lshift
-        .word f_lit
-        .word 8
-        .word f_equ
-        .word f_branch0
-        .word fail
-        .word f_dzchk
-
-test_4mul:
+	.word f_2lit
+	.word 1
+	.word 1
+	.word f_lshift
 	.word f_lit
-	.word 0
-	.word f_4mul
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
+	.word 2
+	.word f_equ
+	.word f_failez
+
+	.word f_2lit
+	.word 1
+	.word 2
+	.word f_lshift
+	.word f_lit
+	.word 4
+	.word f_equ
+	.word f_failez
+
+	display test_4mul, "4*."
 	.word f_lit
 	.word 1
 	.word f_4mul
 	.word f_lit
 	.word 4
 	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
+	.word f_failez
+
 	.word f_lit
 	.word 2
 	.word f_4mul
 	.word f_lit
 	.word 8
 	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
+	.word f_failez
 
-test_hex2num:
+	.word f_lit
+	.word 3
+	.word f_4mul
+	.word f_lit
+	.word 12
+	.word f_equ
+	.word f_failez
+
+	display test_hex2num, "hex2num."
 	.word f_lit
 	.word '0'
 	.word f_hex2num
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
+	.word f_failnz
 
 	.word f_lit
 	.word '9'
@@ -3890,9 +3804,7 @@ test_hex2num:
 	.word f_lit
 	.word 9
 	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
+	.word f_failez
 
 	.word f_lit
 	.word 'A'
@@ -3900,9 +3812,7 @@ test_hex2num:
 	.word f_lit
 	.word 0xA
 	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
+	.word f_failez
 
 	.word f_lit
 	.word 'F'
@@ -3910,537 +3820,427 @@ test_hex2num:
 	.word f_lit
 	.word 0xF
 	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
+	.word f_failez
 
-test_number:
-	.word f_lit
-	.word 0
-	.word f_lit
-	.word 0
+	display test_number, "number."
+	.word f_2lit
+	.word _n0
+	.word 6
 	.word f_number
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
+	.word f_lit
+	.word 0x55AA
+	.word f_equ
+	.word f_failez
 	.word f_dzchk
 
-	.word f_lit
+	.word f_2lit
 	.word _num0
+	.word 3
+	.word f_number
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word _num1
+	.word 4
+	.word f_number
 	.word f_lit
+	.word 0x12
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_2lit
+	.word _num2
+	.word 4
+	.word f_number
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word _num3
+	.word 6
+	.word f_number
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word _num4
+	.word 6
+	.word f_number
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word _num5
 	.word 5
 	.word f_number
-	.word f_lit
-	.word 0xAB123
-	.word f_equ
-	.word f_branch0
-	.word f_fail
+	.word f_failnz
 	.word f_dzchk
 
-        .word f_lit
-        .word _num1
-        .word f_lit
-        .word 5
-        .word f_number
-        .word f_lit
-        .word 0xDEF11
-        .word f_equ
-        .word f_branch0
-        .word f_fail
-        .word f_dzchk
+	.word f_2lit
+	.word _num6
+	.word 5
+	.word f_number
+	.word f_failnz
+	.word f_dzchk
 
-	.word f_lit
-	.word _numfull
-	.word f_lit
-	.word 8
+	.word f_2lit
+	.word _num7
+	.word 2
+	.word f_number
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word _n1
+	.word 10
 	.word f_number
 	.word f_lit
-	.word 0xA5A55A5A
+	.word 0xFFFFFFFF
 	.word f_equ
-	.word f_branch0
-	.word f_fail
+	.word f_failez
+	.word f_dzchk
+
+	.word f_2lit
+	.word _n2
+	.word 10
+	.word f_number
+	.word f_lit
+	.word 0x5A5A5A5A
+	.word f_equ
+	.word f_failez
 	.word f_dzchk
 
 	.word f_branch
 	.word 1f
-_numfull:
-	.ascii "A5A55A5A"
-	.p2align 2, 0
+_n0:
+	.ascii "0x55AA"
+_n1:
+	.ascii "0xFFFFFFFF"
+_n2:
+	.ascii "0x5A5A5A5A"
+	.align 2, 0xFF
 1:
 
-test_bic:
-	.word f_lit
-	.word 1
-	.word f_lit
-	.word 1
-	.word f_bic
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_lit
-	.word 0
-	.word f_lit
-	.word 1
-	.word f_bic
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
-	.word f_lit
-	.word 1
-	.word f_lit
-	.word 0
-	.word f_bic
-	.word f_lit
-	.word 1
-	.word f_equ
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-	.word f_lit
+	display test_bic, "bic."
+	.word f_2lit
 	.word 3
-	.word f_lit
 	.word 1
 	.word f_bic
 	.word f_lit
 	.word 2
 	.word f_equ
-	.word f_branch0
-	.word fail
+	.word f_failez
 	.word f_dzchk
 
-test_comp:
+	.word f_2lit
+	.word 1
+	.word 1
+	.word f_bic
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_2lit
+	.word 0xF
+	.word 2
+	.word f_bic
+	.word f_lit
+	.word 0xD
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	display test_nez, "0<>."
+	.word f_lit
+	.word 0
+	.word f_nez
+	.word f_failnz
+	.word f_dzchk
+
+	.word f_lit
+	.word 1
+	.word f_nez
+	.word f_failez
+	.word f_dzchk
+
+	display test_comp_on_off_stat, "[.].compstat."
 	.word f_compon
-	.word f_incomp
-	.word f_branch0
-	.word fail
+	.word f_compstat
+	.word f_failez
+	.word f_dzchk
 	.word f_compoff
-	.word f_incomp
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
+	.word f_compstat
+	.word f_failnz
 	.word f_dzchk
 
-test_wisimmd:
-	.word f_lit
-	.word f_uuu
-	.word f_wisimmd
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-
+	display test_wisimmd, "wisimmd."
 	.word f_lit
 	.word f_compoff
 	.word f_wisimmd
-	.word f_branch0
-	.word fail
+	.word f_failez
 	.word f_dzchk
 
-test_aligned:
+	.word f_lit
+	.word f_emit
+	.word f_wisimmd
+	.word f_failnz
+	.word f_dzchk
+
+	display test_here, "here.here@.here!.,."
+	.word f_hereload
+	.word f_lit
+	.word 0x55AA
+	.word f_comma
+	.word f_hereload
+	.word f_swap
+	.word f_sub
+	.word f_cell
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_hereload
+	.word f_cell
+	.word f_sub
+	.word f_load
+	.word f_lit
+	.word 0x55AA
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	display test_cmove, "cmove."
+	.word f_lit
+	.word _cm0
+	.word f_hereload
+	.word f_lit
+	.word 5
+	.word f_cmove
+	.word f_dzchk
+
+	.word f_2lit
+	.word _cm0
+	.word 5
+	.word f_hereload
+	.word f_over
+	.word f_compare
+	.word f_failez
+	.word f_dzchk
+
+	.word f_branch
+	.word 1f
+_cm0:
+	.ascii "12345"
+	.p2align 2, 0xFF
+1:
+	display test_aligned, "aligned."
+	.word f_lit
+	.word 4
+	.word f_aligned
+	.word f_lit
+	.word 4
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_lit
+	.word 1
+	.word f_aligned
+	.word f_lit
+	.word 4
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
+	.word f_lit
+	.word 5
+	.word f_aligned
+	.word f_lit
+	.word 8
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
+
 	.word f_lit
 	.word 0
 	.word f_aligned
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
+	.word f_failnz
 	.word f_dzchk
 
-        .word f_lit
-        .word 1
-        .word f_aligned
-	.word f_lit
-	.word addrsize
+	display test_align, "align."
+	.word f_hereload
+	.word f_align
+	.word f_hereload
 	.word f_equ
-	.word f_branch0
-	.word fail
+	.word f_failez
 	.word f_dzchk
 
-        .word f_lit
-        .word 2
-        .word f_aligned
-        .word f_lit
-        .word addrsize
-        .word f_equ
-        .word f_branch0
-        .word fail
-        .word f_dzchk
+	.word f_hereload
+	.word f_dup
+	.word f_lit
+	.word 3
+	.word f_add
+	.word f_herestore
+	.word f_align
+	.word f_hereload
+	.word f_swap
+	.word f_sub
+	.word f_cell
+	.word f_equ
+	.word f_failez
+	.word f_dzchk
 
-        .word f_lit
-        .word 3
-        .word f_aligned
-        .word f_lit
-        .word addrsize
-        .word f_equ
-        .word f_branch0
-        .word fail
-        .word f_dzchk
-
-        .word f_lit
-        .word addrsize
-        .word f_aligned
-        .word f_lit
-        .word addrsize
-        .word f_equ
-        .word f_branch0
-        .word fail
-        .word f_dzchk
-
-        .word f_lit
-        .word addrsize + 1
-        .word f_aligned
-        .word f_lit
-        .word addrsize * 2
-        .word f_equ
-        .word f_branch0
-        .word fail
-        .word f_dzchk
-
-test_wentrget:
+	display test_wentrload, "wentr@."
 	.word f_lit
 	.word f_call
-	.word f_wentrget
+	.word f_wentrload
 	.word f_lit
 	.word a_call
 	.word f_equ
-	.word f_branch0
-	.word fail
+	.word f_failez
 	.word f_dzchk
 
-test_defword:
-	.word f_lit
-	.word _str_hi
-	.word f_lit
-	.word 2
+	display test_defword, "defword."
+	.word f_hereload
+	.word f_2lit
+	.word _n_nop
+	.word 3
 	.word f_defword
-
+	.word f_hereload
+	.word f_swap
+	.word f_sub
+	.word f_lit
+	.word addrsize * 3
+	.word f_equ
+	.word f_failez
 	.word f_dzchk
 
-	.word f_lit
-	.word f_lit
-	.word f_herepush
+	.word f_2lit
+	.word n_exit
+	.word 4
+	.word f_find
+	.word f_comma
 
-	.word f_lit
-	.word 'H'
-	.word f_herepush
-
-	.word f_lit
-	.word f_emit
-	.word f_herepush
-
-	.word f_lit
-	.word f_lit
-	.word f_herepush
-
-	.word f_lit
-	.word 'i'
-	.word f_herepush
-
-	.word f_lit
-	.word f_emit
-	.word f_herepush
-
-	.word f_lit
-	.word f_exit
-	.word f_herepush
+	.word f_2lit
+	.word _n_nop
+	.word 3
+	.word f_find
+	.word f_execute
 
 	.word f_branch
 	.word 1f
-_str_hi:
-	.ascii "hi"
-	.p2align 2, 0
+_n_nop:
+	.ascii "nop"
+	.p2align 2, 0xFF
 1:
-	.word f_dzchk
 
-test_tx:
-	.word f_lit
-	.word 'F'
-	.word f_emit
-	.word f_dzchk
-	.word f_lit
-	.word 'O'
-	.word f_emit
-	.word f_dzchk
-	.word f_lit
-	.word 'R'
-	.word f_emit
-	.word f_dzchk
-	.word f_lit
-	.word 'T'
-	.word f_emit
-	.word f_dzchk
-	.word f_lit
-	.word 'H'
-	.word f_emit
-	.word f_dzchk
-
-test_toinchk:
-	.word f_toinchk
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-	.word f_toinmax
-	.word f_toin
-	.word f_store
-	.word f_toinchk
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-	.word f_lit
-	.word -1
-	.word f_toin
-	.word f_store
-	.word f_toinchk
-	.word f_branch0
-	.word 1f
-	.word f_fail
-1:
-	.word f_dzchk
-	.word f_toinrst
-	.word f_toinchk
-	.word f_branch0
-	.word fail
-	.word f_dzchk
-
-test_hex:
-	.word f_lit
-	.word 0
-	.word f_hex4
-	.word f_dzchk
-	.word f_lit
-	.word 9
-	.word f_hex4
-	.word f_dzchk
-	.word f_lit
-	.word 0xA
-	.word f_hex4
-	.word f_dzchk
-	.word f_lit
-	.word 0xF
-	.word f_hex4
-	.word f_dzchk
-
-	.word f_lit
-	.word 0x08
-	.word f_hex8
-	.word f_dzchk
-	.word f_lit
-	.word 0x09
-	.word f_hex8
-	.word f_dzchk
-	.word f_lit
-	.word 0xAF
-	.word f_hex8
-	.word f_dzchk
-
-	.word f_lit
-	.word 0x0010
-	.word f_hex16
-	.word f_dzchk
-	.word f_lit
-	.word 0x09AF
-	.word f_hex16
-	.word f_dzchk
-
-	.word f_lit
-	.word 0x00000020
-	.word f_hex32
-	.word f_dzchk
-	.word f_lit
-	.word 0x01234567
-	.word f_hex32
-	.word f_dzchk
-	.word f_lit
-	.word 0x89ABCDEF
-	.word f_hex32
-	.word f_dzchk
-	.word f_lit
-	.word 0xFEDCBA98
-	.word f_hex32
-	.word f_dzchk
-	.word f_lit
-	.word 0x76543210
-	.word f_hex32
-	.word f_dzchk
-
-	.word f_spget
-	.word f_hex32
-	.word f_dzchk
-	.word f_stget
-	.word f_hex32
-	.word f_dzchk
-
-test_toinmax:
-	.word f_lit
-	.word 'T'
-	.word f_emit
-	.word f_toinmax
-	.word f_hex8
-	.word f_dzchk
-
-test_dsdump:
-	.word f_dsdump
-	.word f_dzchk
-	.word f_lit
-	.word 0x55
-	.word f_lit
-	.word 0xAA
-	.word f_dsdump
-	.word f_drop
-	.word f_drop
-	.word f_dsdump
-	.word f_dzchk
-
-test_words:
-	.word f_words
-	.word f_dzchk
-
-test_type:
-	.word f_lit
-	.word 1f
-	.word f_lit
-	.word 7
-	.word f_type
-	.word f_dzchk
-	.word f_branch
-	.word 2f
-1:
-	.ascii "FORTH\n\r"
-	.p2align 2, 0
-2:
-
-test_interpret:
-	.word f_interpret
-
-test_token:
+	display test_token_interpret, "token.interpret."
 1:
 	.word f_toinrst
 	.word f_token
-	.word f_lit
-	.word '['
-	.word f_emit
-	.word f_tib
-	.word f_toin
-	.word f_load
-	.word f_type
-	.word f_lit
-	.word ']'
-	.word f_emit
+
+	.word f_interpret
+
 	.word f_branch
 	.word 1b
 
-test_echo:
+	display test_echo, "key.emit."
+1:
 	.word f_key
+	.word f_dup
 	.word f_emit
 	.word f_lit
-	.word 0
+	.word 'Q'
+	.word f_equ
 	.word f_branch0
-	.word test_echo
+	.word 1b
+	.word f_dzchk
 #endif
 
 	.word f_motd
+
+	.word f_2lit
+	.word _msg_chipid
+	.word _msg_end_chipid - _msg_chipid
+	.word f_type
+	.word f_chipuid
+	.word f_hex32
+	.word f_hex32
+	.word f_hex32
+	.word f_cr
+
+	.word f_branch
+	.word 1f
+_msg_chipid:
+	.ascii "CHIP UID: "
+_msg_end_chipid:
+	.p2align 2, 0xFF
+1:
+
+interpret_loop:
+1:
+	.word f_toinrst
+	.word f_token
+
 	.word f_interpret
-	.word f_uuu
+
+	.word f_branch
+	.word 1b
+
+	.word f_noop
+	.word f_okay
 fail:
 	.word f_fail
 
-boot_dog:
+boot_back:
 	.word f_yield
 	.word f_feedog
 	.word f_branch
-	.word boot_dog
-
-forth:
-	li ss, 0
-	la ip, boot_human
-	la rp, rstk_human_end
-	la st, dstk_human_end
-	mv sp, st
-	la up, task_human
-	la wp, task_dog
-	sw wp, tonext(up)
-	tasksave
-
-        li ss, 0
-        la ip, boot_dog
-        la rp, rstk_dog_end
-        la st, dstk_dog_end
-        mv sp, st
-        la up, task_dog
-	la wp, task_human
-        sw wp, tonext(up)
-        tasksave
-
-	la wp, yield_count
-	sw zero, 0(wp)
-
-	la wp, toin
-	sw zero, 0(wp)
-	la wp, lastword
-	la xp, latest
-	sw wp, 0(xp)
-	la wp, _ram_dict_start
-	la xp, ramhere
-	sw wp, 0(xp)
-
-	la wp, systick_count
-	sw zero, 0(wp)
-	sw zero, addrsize(wp)
-
-	next
-
-	// flash min erase size is 1K
-	.p2align 10, 0xFF  // align with 1024
+	.word boot_back
 
 	.section .bss
-_ram_vector:
-	.fill _vector_end - _vector, 1, 0
-_ram_vector_end:
-dstk_human:
-        .fill dstksize, addrsize, 0
-dstk_human_end:
-        .fill 1, addrsize, 0
-dgap_human:
-        .fill gapsize, addrsize, 0
-rstk_human:
-        .fill rstksize, addrsize, 0
-rstk_human_end:
-        .fill 1, addrsize, 0
-systick_count:
-	.fill 2, addrsize, 0
-yield_count:
+	.p2align 2, 0
+_ram_entry:
 	.fill 1, addrsize, 0
-tib:
-	.fill 31, 1, 0
-tib_end:
-	.fill 1, 1, 0
-toin:
+irqcount:
+	.fill 1, addrsize, 0
+ycount:
+	.fill 1, addrsize, 0
+mscountl:
+	.fill 1, addrsize, 0
+mscounth:
 	.fill 1, addrsize, 0
 latest:
 	.fill 1, addrsize, 0
-ramhere:
+here:
+	.fill 1, addrsize, 0
+toin:
+	.fill 1, addrsize, 0
+tib:
+	.fill tibsize, 1, 0
+tib_top:
+	.fill 1, 1, 0
+	.p2align 2, 0
+dstk_human:
+	.fill stksize, addrsize, 0
+dstk_top_human:
+	.fill 1, addrsize, 0
+rstk_human:
+	.fill stksize, addrsize, 0
+rstk_top_human:
 	.fill 1, addrsize, 0
 task_human:
-	.fill tasksize, 1, 0
-dstk_dog:
-        .fill dstksize, addrsize, 0
-dstk_dog_end:
-        .fill 1, addrsize, 0
-rstk_dog:
-        .fill rstksize, addrsize, 0
-rstk_dog_end:
-        .fill 1, addrsize, 0
-task_dog:
 	.fill tasksize, addrsize, 0
+dstk_back:
+	.fill stksize, addrsize, 0
+dstk_top_back:
+	.fill 1, addrsize, 0
+rstk_back:
+	.fill stksize, addrsize, 0
+rstk_top_back:
+	.fill 1, addrsize, 0
+task_back:
+	.fill tasksize, addrsize, 0
+dict_base:
+	.fill 0, addrsize, 0

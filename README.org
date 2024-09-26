@@ -21,25 +21,105 @@ use this software download it into mcu:
 
 https://www.wch.cn/downloads/WCH-LinkUtility_ZIP.html
 
-* access
+* connect
 
 PD6 provide half-duplex one wire uart
 
-baudrate is 115200
+#+BEGIN_SRC
+ _____ _____ _____ _____ _____
+|   __|     | __  |_   _|  |  |
+|   __|  |  |    -| | | |     |
+|__|  |_____|__|__| |_| |__|__|
+
+ITC FORTH on CH32V003 (rv32ec)
+
+CHIP UID: FE2AABCD6656BC5FFFFFFFFF
+
+0x1 0x2 + . 00000003
+
+#+END_SRC
+
+baudrate is 921600
 
 * word layout
 
 word header is optimized for ch32v003, please read source code
 
-* screenshot
+* define word
 
-[[file:ch32v003-forth.png]]
+#+BEGIN_SRC forth
+: star 0x2A emit ;
+: stars dup if begin star 1- dup 0= until then drop ;
+#+END_SRC
+
+# look dict
+
+#+BEGIN_SRC forth
+words
+#+END_SRC
+
+* reset mcu
+
+#+BEGIN_SRC forth
+sysrst
+#+END_SRC
+
+* save ram into rom
+
+You can save your environment into rom
+
+#+BEGIN_SRC forth
+romunlock rambakerase rompgon rambaksave rompgoff romlock
+#+END_SRC
+
+* load ram from rom
+
+You can load your saved environment from rom
+
+#+BEGIN_SRC forth
+rambakload
+#+END_SRC
+
+* watchdog
+
+#+BEGIN_SRC forth
+dogon
+#+END_SRC
+
+You can trig a watchdog reset:
+
+#+BEGIN_SRC forth
+: badloop begin false until ;
+badloop
+#+END_SRC
+
+* systick timer
+
+default systick use for a millis counter
+
+#+BEGIN_SRC forth
+  systickon
+#+END_SRC
+
+dump ms count low 32bit:
+
+#+BEGIN_SRC forth
+mscountl ?
+#+END_SRC
+
+dump ms count high 32bit:
+
+#+BEGIN_SRC forth
+mscounth ?
+#+END_SRC
 
 * todo
 
-1. add here switch & save into rom
+1. add doc for multi task
 
-2. add driver support: i2c slave
+2. add doc for define a new word in asm file
+
+3. add i2c host driver
 
 * license
 
